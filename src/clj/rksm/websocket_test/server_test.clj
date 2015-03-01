@@ -1,17 +1,19 @@
 (ns rksm.websocket-test.server-test
-  (:require [rksm.websocket-test.server :refer :all])
-  (:require [clojure.test :refer :all])
-  (:require [rksm.websocket-test.client :as client])
-  (:require [org.httpkit.client :as http-client])
-  )
+  (:require [rksm.websocket-test.server :as server]
+            [clojure.test :refer :all]
+            [rksm.websocket-test.client :as client]
+            [org.httpkit.client :as http-client]
+            [clojure.core.async :as async]))
+
+; (require '[rksm.websocket-test.client :as client] :reload)
 
 (def test-servers (atom []))
 
 (defn fixture [test]
   (test)
   (do
-    (doseq [s @servers]
-      (stop-server! s)
+    (doseq [s @server/servers]
+      (server/stop-server! s)
       (client/stop-all!))
     ; (swap! servers empty)
     ))
@@ -20,12 +22,12 @@
 
 (deftest create-a-ws-server
 
-  (let [s (ensure-server! :port 8082)]
+  (let [{:keys [port host id] :as s} (server/ensure-server! :port 8082)]
 
     (testing "server data"
-      (is (= 8082 (:port s)))
-      (is (= "0.0.0.0" (:host s)))
-      (contains? s :id))
+      (is (= 8082 port))
+      (is (= "0.0.0.0" host))
+      (is (not (nil? id))))
 
     (testing "simple GET"
       (let [{:keys [body status]} @(http-client/get "http://localhost:8082")]
@@ -33,22 +35,36 @@
         (is (= 404 status))))
 
     (testing "shutdown"
-      (is (= s (first @servers)))
-      (stop-server! s)
+      (is (= s (first @server/servers)))
+      (server/stop-server! s)
       (let [{:keys [body status]} @(http-client/get "http://localhost:8082")]
         (is (nil? body))
         (is (nil? status))))))
 
 (deftest add-a-service
   (let [received (promise)
-        s (ensure-server! :port 8082)
-        c (client/ensure-connection! :port 8082)]
-    (add-service! "test-service" s (fn [con msg]  (deliver received (:data msg))))
-    (client/send! c {:target (:id s) :action "test-service" :data "test"})
-    (is (= "test" (deref received 200 nil)))))
+        {server-id :id, :as s} (server/ensure-server! :port 8082)
+        {client-id :id, :as c} (client/ensure-connection! :port 8082)]
+    (server/add-service! "test-service" s (fn [con msg]  (deliver received msg)))
+    (client/send! c {:target server-id :action "test-service" :data "test"})
+    (let [{:keys [data id sender target]} (deref received 200 nil)]
+      (is (= "test" data))
+      (is (not (nil? id)))
+      (is (= client-id sender))
+      (is (= server-id target)))))
+
+(deftest echo-service-test
+  (let [{server-id :id, :as s} (server/ensure-server! :port 8082)
+        {client-id :id, :as c} (client/ensure-connection! :port 8082)]
+    (server/add-service! "echo" s (fn [con msg]  (server/answer! con msg (:data msg))))
+    (let [{:keys [data]} (async/<!! (client/send! c {:target (:id s) :action "echo" :data "test"}))]
+      (is (= "test" data)))
+    @(future (Thread/sleep 500))
+    ))
 
 (comment
 
+ (clojure.test/test-var #'echo-service-test)
  (clojure.test/test-var #'create-a-ws-server)
  (test-ns *ns*)
  )

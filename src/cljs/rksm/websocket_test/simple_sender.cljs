@@ -4,15 +4,15 @@
 
 (def c (chan))
 
+(go
 
-(go 
  (<! (timeout 1000))
  (go (>! c "test"))
-    ) 
+    )
 
 (go (js/console.log (<! c)))
 
-(comment 
+(comment
  (async/go
   (js/console.log "foooo?")
   (let [{:keys [ws-channel error]} (<! (ws-ch "ws://localhost:8081"))]

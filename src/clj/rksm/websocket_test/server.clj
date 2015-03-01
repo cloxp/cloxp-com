@@ -3,7 +3,24 @@
             [compojure.handler :as handler]
             [org.httpkit.server :as http]
             [compojure.core :refer [defroutes GET POST DELETE ANY context]]
-            [clojure.data.json :as json]))
+            [clojure.data.json :as json]
+            [rksm.websocket-test.com :as com]))
+
+; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+(defonce log (agent []))
+
+(defn log-req
+  [app]
+  (fn [req]
+    (let [{:keys [server-port content-length websocket?
+                  content-type uri server-name scheme
+                  request-method]} req]
+      (println (format "%s %s://%s:%s%s (%s, %s)"
+                       (.toUpperCase (name request-method))
+                       (name scheme) server-name server-port uri
+                       content-length content-type)))
+    (app req)))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -34,7 +51,7 @@
 
 (defn websocket-service-handler [req]
   (http/with-channel req channel
-    (http/on-close channel (fn [status]))
+    (http/on-close channel (fn [status] (println "channel closed" status)))
     (http/on-receive channel (fn [data]
                                (let [{host :server-name, port :server-port} req
                                      server (find-server-by-host-and-port :host host :port port)]
@@ -42,17 +59,14 @@
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-(defn app [req]
-   ;; all other, return 404
-
-; (run-server (site #'all-routes) {:port 8080})
-)
-
 (defroutes all-routes
 ;   (GET "/" [] show-landing-page)
   (GET "/ws" [] websocket-service-handler)
-  (route/files "/" {:root "resources" :allow-symlinks? true})
+  (route/files "/" {:root "./public" :allow-symlinks? true})
   (route/not-found "<p>Page not found.</p>"))
+
+(def app
+  (-> all-routes log-req))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -60,7 +74,9 @@
 
 (defn find-server-by-host-and-port
   [& {:keys [host port]}]
-  (first (filter #(and (= host (:host %)) (= port (:port %))) @servers)))
+  (->> @servers
+    (filter #(= {:host host, :port port} (select-keys % [:host :port])))
+    first))
 
 (defn stop-server!
   [server]
@@ -75,8 +91,7 @@
 
 (defn start-server!
   [& {:keys [port host], :or {port 8081 host "0.0.0.0"} :as opts}]
-  ;   (reset! server (run-server #'app {:port 8081}))
-  (let [stop (http/run-server #'all-routes {:port port :host host})
+  (let [stop (http/run-server #'app {:port port :host host})
         s {:id (str (java.util.UUID/randomUUID))
            :stop stop
            :port port :host host}]
@@ -89,13 +104,27 @@
     (or (find-server-by-host-and-port :host host :port port)
         (apply start-server! opts))))
 
+; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; sending / receiving
+
+(defn send!
+  [{c :channel, :as con} msg]
+  (com/send! #(http/send! c (json/write-str %)) con msg))
+
+(defn answer!
+ [{c :channel, :as con} msg data]
+  (com/answer! #(http/send! c (json/write-str %)) con msg data))
+
+; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; services
+
 (defn add-service!
   [name {id :id :as server} handler]
   (let [s (first (filter #(= id (:id %)) @servers))]
     (assert s (str "server with id " id " not found"))
     (swap! servers (partial replace {s (assoc-in s [:services name] handler)}))))
 
-(defn answer-message-not-understood 
+(defn answer-message-not-understood
   [server channel data]
   (http/send! channel (json/write-str {:error "messageNotUnderstood"})))
 
@@ -107,14 +136,15 @@
     (cond
       (not= (:id server) target) (answer-message-not-understood server channel data)
       (nil? handler) (answer-message-not-understood server channel data)
-      :default (handler channel msg))))
+      :default (handler (assoc server :channel channel) msg))))
 
 ; (defn send!
 ;   [& {:keys [target connection data]}]
 ;   123)
 
 (comment
- (start-server)
+ (start-server! :port 8081)
+ (stop-all-servers!)
  (stop-server (first @servers))
  (-> (first @servers) .)
  servers
