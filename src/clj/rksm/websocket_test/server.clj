@@ -74,9 +74,11 @@
 
 (defn find-server-by-host-and-port
   [& {:keys [host port]}]
-  (->> @servers
-    (filter #(= {:host host, :port port} (select-keys % [:host :port])))
-    first))
+  (or (->> @servers
+        (filter #(= {:host host, :port port} (select-keys % [:host :port])))
+        first)
+      (if (= host "localhost") 
+        (find-server-by-host-and-port :host "0.0.0.0" :port port))))
 
 (defn stop-server!
   [server]
@@ -89,6 +91,8 @@
   []
   (doseq [s @servers] (stop-server! s)))
 
+(declare default-services add-service!)
+
 (defn start-server!
   [& {:keys [port host], :or {port 8081 host "0.0.0.0"} :as opts}]
   (let [stop (http/run-server #'app {:port port :host host})
@@ -96,6 +100,8 @@
            :stop stop
            :port port :host host}]
     (swap! servers conj s)
+    (doseq [[name handler] (default-services)]
+      (add-service! name s handler))
     s))
 
 (defn ensure-server!
@@ -108,12 +114,16 @@
 ; sending / receiving
 
 (defn send!
-  [{c :channel, :as con} msg]
-  (com/send! #(http/send! c (json/write-str %)) con msg))
+  [{c :channel, :as con} msg
+   & {:keys [expect-more-responses], :or {expect-more-responses false}}]
+  (com/send! #(http/send! c (json/write-str %)) con msg
+             :expect-more-responses expect-more-responses))
 
 (defn answer!
- [{c :channel, :as con} msg data]
-  (com/answer! #(http/send! c (json/write-str %)) con msg data))
+  [{c :channel, :as con} msg data
+   & {:keys [expect-more-responses], :or {expect-more-responses false}}]
+  (com/answer! #(http/send! c (json/write-str %)) con msg data
+              :expect-more-responses expect-more-responses))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; services
@@ -122,28 +132,56 @@
   [name {id :id :as server} handler]
   (let [s (first (filter #(= id (:id %)) @servers))]
     (assert s (str "server with id " id " not found"))
-    (swap! servers (partial replace {s (assoc-in s [:services name] handler)}))))
+    (swap! servers (partial replace {s (assoc-in s [:services name] handler)}))
+    [@servers]))
 
 (defn answer-message-not-understood
-  [server channel data]
-  (http/send! channel (json/write-str {:error "messageNotUnderstood"})))
+  [con msg]
+  (answer! con msg {:error "messageNotUnderstood"}))
+
+(defn answer-with-info
+  [{id :id, :as con} msg]
+  (answer! con msg {:id id}))
+
+(defn echo-service-handler
+  [con msg]
+  (println "echo service called")
+  (answer! con msg (:data msg)))
+
+(defn add-service-handler
+  [server {{:keys [name handler]} :data, :as msg}]
+  (try 
+    (add-service! name server (eval (read-string handler)))
+    (answer! server msg "OK")
+    (catch Exception e
+      (answer! server msg {:error (str e)}))))
+
+(defn default-services
+  []
+  {"echo" echo-service-handler
+   "add-service" add-service-handler})
 
 (defn handle-service-request!
   [server channel data]
-  (let [msg (if (string? data) (json/read-str data :key-fn keyword))
+  ; FIXME: validate data!
+  (let [msg (if (string? data) (json/read-str data :key-fn keyword) data)
         {:keys [target action]} msg
-        handler (get-in server [:services action])]
+        handler (get-in server [:services action])
+        connection (assoc server :channel channel)]
+    msg
     (cond
-      (not= (:id server) target) (answer-message-not-understood server channel data)
-      (nil? handler) (answer-message-not-understood server channel data)
-      :default (handler (assoc server :channel channel) msg))))
+      (= action "info") (answer-with-info connection msg)
+      (not= (:id server) target) (answer-message-not-understood connection msg)
+      (nil? handler) (answer-message-not-understood connection msg)
+      :default (handler connection msg))))
 
-; (defn send!
-;   [& {:keys [target connection data]}]
-;   123)
+; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 (comment
  (start-server! :port 8081)
+
+ (let [s (first @servers)] (add-service! "echo" s echo-service-handler))
+ 
  (stop-all-servers!)
  (stop-server (first @servers))
  (-> (first @servers) .)
