@@ -1,54 +1,45 @@
 (ns rksm.websocket-test.simple-sender
-  (:require [cljs.core.async :refer [put! chan <! >! timeout]])
-  (:require-macros [cljs.core.async.macros :refer (go)]))
+  (:require [rksm.websocket-test.net :as net]
+            [cljs.core.async :refer [<! >! put! close! chan pub sub]]
+            [rksm.websocket-test.async-util :refer [join]]
+            [cognitect.transit :as t]
+            [figwheel.client :as fw])
+  (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
 
-(def c (chan))
 
-(go
 
- (<! (timeout 1000))
- (go (>! c "test"))
-    )
+; (let [{id :id, :as c} (net/connect url)
+;       add-service-msg {:action "add-service"
+;                       :data {:name "stream"
+;                               :handler (str '(fn [con msg]
+;                                               (rksm.websocket-test.server/answer! con msg 1 :expect-more-responses true)
+;                                               (rksm.websocket-test.server/answer! con msg 2 :expect-more-responses true)
+;                                               (rksm.websocket-test.server/answer! con msg 3)))}}]
+;   (go
+;   (let [_ (<! (net/send c add-service-msg))
+;          result (<! (join (net/send c {:action "stream" :data nil})))]
+;      (is (= [1 2 3] (map (comp :data :message) result)))
+;      (done))))
+(enable-console-print!)
 
-(go (js/console.log (<! c)))
+(println "test 1235")
 
-(comment
- (async/go
-  (js/console.log "foooo?")
-  (let [{:keys [ws-channel error]} (<! (ws-ch "ws://localhost:8081"))]
-    (if-not error
-      (do (>! ws-channel "Hello server from client!")
-        (loop []
-          (if-let [{:keys [message error]} (<! ws-channel)]
-            (if error
-              (js/console.log "Connection error:" error)
-              (do
-                (.log js/console "Got message from server:" (pr-str message))
-                (recur)))
-            (js/console.log "Connection closed")))
-        )
-      (js/console.log "Error:" (pr-str error))))))
+(def con (net/connect "ws://localhost:8081/ws"))
 
-(comment (ns rksm.websocket-test.simple-sender
-  (:require [chord.client :refer [ws-ch]]
-            [cljs.core.async :refer [<! >! put! close!]])
-  (:require-macros [cljs.core.async.macros :refer [go]]))
+(let [t1 (js/Date.)]
+ (go
+  (println (<! (net/send con {:action "echo" :data "huhu!"})))
+  (let [t2 (js/Date.)]
+    (println (- t2 t1))
+    (dotimes [_ 10]
+      (do
+        (<! (net/send con {:action "echo" :data "harhahr!"}))
+        (println (- (js/Date.) t2)))))
+  ))
 
-(.log js/console "barrrr?")
+; (fw/start {
+;   :websocket-url   "ws://localhost:3449/figwheel-ws"
+;   :on-jsload (fn [] (print "reloaded"))
+; })
 
-(go
- (js/console.log "foooo?")
- (let [{:keys [ws-channel error]} (<! (ws-ch "ws://localhost:8081"))]
-   (if-not error
-     (do (>! ws-channel "Hello server from client!")
-       (loop []
-         (if-let [{:keys [message error]} (<! ws-channel)]
-           (if error
-             (js/console.log "Connection error:" error)
-             (do
-               (.log js/console "Got message from server:" (pr-str message))
-               (recur)))
-           (js/console.log "Connection closed")))
-       )
-          (js/console.log "Error:" (pr-str error)))))
-)
+
