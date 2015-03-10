@@ -2,3 +2,4 @@
 /.nrepl-port
 /cloxp-cljs-build/
 /target/
+/pom.xml

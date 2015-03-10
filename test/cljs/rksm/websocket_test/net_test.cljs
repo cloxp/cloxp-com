@@ -1,4 +1,4 @@
-(ns rksm.websocket-test.net-test
+(ns ^:figwheel-always rksm.websocket-test.net-test
   (:require [rksm.websocket-test.net :as net]
             [cljs.core.async :refer [<! >! put! close! chan pub sub]]
             [rksm.websocket-test.async-util :refer [join]]
