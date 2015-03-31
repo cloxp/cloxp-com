@@ -2,7 +2,8 @@
   (:require [chord.client :refer [ws-ch]]
             [cljs.core.async :refer [<! >! put! close! chan sub pub]]
             [cljs-uuid-utils :as uuid]
-            [cognitect.transit :as t])
+            [cognitect.transit :as t]
+            [rksm.websocket-test.com :as com])
   (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
 
 (def debug true)

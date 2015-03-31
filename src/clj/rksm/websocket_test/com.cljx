@@ -1,12 +1,25 @@
 (ns rksm.websocket-test.com
-  (:import (java.util UUID)))
+  #+cljs (:require [cljs-uuid-utils :as uuid])
+  #+clj (:import (java.util UUID)))
+
+; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+(defn- uuid
+  []
+  #+clj (str (UUID/randomUUID))
+  #+cljs (uuid/uuid-string (uuid/make-random-uuid)))
+
+; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+; (defprotocol IConnection
+;   (send [this msg]))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 (defn send-msg
   [{:keys [id] :as sender} msg expect-more-responses]
   (merge {:sender id,
-          :id (str (UUID/randomUUID)),
+          :id (uuid),
           :expect-more-responses expect-more-responses}
          msg))
 

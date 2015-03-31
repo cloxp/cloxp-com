@@ -1,6 +1,6 @@
 (ns ^:figwheel-always rksm.websocket-test.net-test
   (:require [rksm.websocket-test.net :as net]
-            [cljs.core.async :refer [<! >! put! close! chan pub sub]]
+            [cljs.core.async :refer [<! >! put! close! chan pub sub timeout]]
             [rksm.websocket-test.async-util :refer [join]]
             [cognitect.transit :as t]
             [figwheel.client :as fw]
@@ -15,7 +15,22 @@
   (doseq [{id :id} @net/connections]
     (net/remove-connection id)))
 
+(defn signal-end [t]
+  (t)
+  (println "done")
+  (set! (.-cljs_tests_done js/window) true))
+
 (use-fixtures :each net-cleanup)
+
+(defn start-tests
+  []
+  (let [done-chan (chan)
+         test-env (run-tests 'rksm.websocket-test.net-test)]
+    (go-loop []
+      (if (test/testing-complete? test-env)
+        (>! done-chan test-env)
+        (do (<! (timeout 100)) (recur))))
+    done-chan))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -46,11 +61,10 @@
 
 (enable-console-print!)
 
+(go (set! (.-cljs_tests_done js/window) (clj->js (<! (start-tests)))))
+
 ; (fw/start {
 ;   :websocket-url   "ws://localhost:3449/figwheel-ws"
 ;   :on-jsload (fn [] (print "reloaded"))
 ; })
 
-(js/setTimeout
- #(run-tests 'rksm.websocket-test.net-test)
- 100)
