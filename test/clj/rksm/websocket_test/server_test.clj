@@ -5,10 +5,6 @@
             [org.httpkit.client :as http-client]
             [clojure.core.async :as async :refer [<!! >!! chan go]]))
 
-; (require '[rksm.websocket-test.client :as client] :reload)
-
-(def test-servers (atom []))
-
 (def ^:dynamic *client*)
 (def ^:dynamic *server*)
 
@@ -19,11 +15,11 @@
   (do
     (doseq [s @server/servers]
       (server/stop-server! s)
-      (client/stop-all!))
-    ; (swap! servers empty)
-    ))
+      (client/stop-all!))))
 
 (use-fixtures :each fixture)
+
+; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 (deftest create-a-ws-server
 

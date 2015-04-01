@@ -1,4 +1,6 @@
-(ns ^:figwheel-always rksm.websocket-test.net-test
+(ns ^{:figwheel-always true
+      :doc "See rksm.websocket-test.client-test for how running these tests as
+      part of the server tests"} rksm.websocket-test.net-test
   (:require [rksm.websocket-test.net :as net]
             [cljs.core.async :refer [<! >! put! close! chan pub sub timeout]]
             [rksm.websocket-test.async-util :refer [join]]
@@ -8,7 +10,7 @@
   (:require-macros [cljs.core.async.macros :refer [go go-loop]]
                    [cemerick.cljs.test :refer [is deftest run-tests testing test-var use-fixtures done]]))
 
-(def url "ws://localhost:8081/ws")
+(def url "ws://localhost:8082/ws")
 
 (defn net-cleanup [t]
   (t)
@@ -67,4 +69,3 @@
 ;   :websocket-url   "ws://localhost:3449/figwheel-ws"
 ;   :on-jsload (fn [] (print "reloaded"))
 ; })
-

@@ -1,3 +1,4 @@
+var testTimeout = 30*1000; // ms
 var fs = require('fs');
 var page = require('webpage').create();
 
@@ -15,3 +16,8 @@ page.open(url, function (status) {
     slimer.exit(success ? 0 : 1);
   }, 100);
 });
+
+setTimeout(function() {
+  console.log("TIMEOUT RUNNING TESTS");
+  slimer.exit(2);
+}, testTimeout);

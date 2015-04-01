@@ -42,16 +42,16 @@
 (defn app-websocket-echo [req]
   (http/with-channel req channel
     (http/on-close channel (fn [status]
-                        (println "channel closed")))
+                             (println "[app-websocket-echo] channel closed" status)))
     (if (http/websocket? channel)
       (println "WebSocket channel")
       (println "HTTP channel"))
     (http/on-receive channel (fn [data]
-                          (http/send! channel data)))))
+                               (http/send! channel data)))))
 
 (defn websocket-service-handler [req]
   (http/with-channel req channel
-    (http/on-close channel (fn [status] (println "channel closed" status)))
+    (http/on-close channel (fn [status] (println "[app-websocket-echo] channel closed" status)))
     (http/on-receive channel (fn [data]
                                (let [{host :server-name, port :server-port} req
                                      server (find-server-by-host-and-port :host host :port port)]

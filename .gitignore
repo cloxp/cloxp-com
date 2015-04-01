@@ -1,3 +1,4 @@
+*-init.clj
 /.lein-failures
 /.nrepl-port
 /cloxp-cljs-build/

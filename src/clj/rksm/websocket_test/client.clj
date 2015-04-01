@@ -72,7 +72,7 @@
                               (let [msg (json/read-str msg-string :key-fn keyword)]
                                 (>!! ws-chan {:message msg})))
                 :on-error (fn [err] (>!! ws-chan {:error err}))
-                :on-close (fn [err] (close! ws-chan))
+                :on-close (fn [err _] (close! ws-chan))
                 :headers {"sec-websocket-protocol" ["lively-json"]})))
 
 (defn- ws-connect!
