@@ -8,7 +8,7 @@
             [figwheel.client :as fw]
             [cemerick.cljs.test :as test])
   (:require-macros [cljs.core.async.macros :refer [go go-loop]]
-                   [cemerick.cljs.test :refer [is deftest run-tests testing test-var use-fixtures done]]))
+                   [cemerick.cljs.test :refer [is deftest run-tests testing test-var use-fixtures]]))
 
 (def url "ws://localhost:8082/ws")
 

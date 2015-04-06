@@ -1,6 +1,6 @@
 (ns rksm.websocket-test.client-test
   (:require [clojure.core.async :as async :refer [go go-loop <!! >!! thread]]
-            [rksm.cloxp-projects.core :as proj]
+            [rksm.cloxp-projects.lein :as lein]
             [rksm.subprocess :as subp]
             [rksm.websocket-test.server :as server]
             [rksm.websocket-test.client :as client]
@@ -23,7 +23,7 @@
 (defn project-clj
   []
   (-> (clojure.java.io/file ".")
-    proj/lein-project-conf-content
+    lein/lein-project-conf-content
     (assoc :eval-in :leiningen)))
 
 (defn run-cljs-tests

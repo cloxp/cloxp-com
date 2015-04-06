@@ -4,8 +4,7 @@
             :url "http://opensource.org/licenses/MIT"}
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
-                 [org.clojure/clojurescript "0.0-3031"]
-                 [com.cemerick/clojurescript.test "0.3.3"]
+                 [org.clojure/clojurescript "0.0-3031"]                 
                  [http-kit "2.1.19"]
                  [compojure/compojure "1.3.2"]
                  [javax.servlet/servlet-api "2.5"]
@@ -25,8 +24,10 @@
                   {:source-paths ["src/clj" "test/clj" "src/cljs" "test/cljs"]
                    :output-path "target/classes"
                    :rules :cljs}]}
-  :profiles {:dev {:dependencies [[rksm/subprocess "0.1.2-SNAPSHOT"]
-                                  [org.rksm/cloxp-projects "0.1.0-SNAPSHOT"]]
+  ; :dev-dependencies [[com.cemerick/clojurescript.test "0.3.3"]]
+  :profiles {:dev {:dependencies [[com.cemerick/clojurescript.test "0.3.3"]
+                                  [rksm/subprocess "0.1.2"]
+                                  [org.rksm/cloxp-projects "0.1.2-SNAPSHOT"]]
                    :plugins [[lein-cljsbuild "1.0.4"]
                              [com.keminglabs/cljx "0.6.0"]
                              [lein-figwheel "0.2.5-SNAPSHOT"]]
