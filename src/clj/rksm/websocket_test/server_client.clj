@@ -1,4 +1,4 @@
-(ns rksm.websocket-test.client
+(ns rksm.websocket-test.server-client
   (:refer-clojure :exclude [send])
   (:require [gniazdo.core :as ws]
             [clojure.string :as s]
@@ -7,14 +7,20 @@
             [clojure.core.async :as async :refer [>! >!! <! <!! chan go go-loop sub pub close!]])
   (:import (java.util UUID)))
 
-(declare send!)
+(declare send! answer! add-service!)
 
-(defprotocol IConnection
-  (send [this msg]))
-
-(defrecord Connection [url id tracker-id ws]
-  IConnection
-  (send [this msg] (send! this msg)))
+(defrecord Connection [id ws receive services]
+  com/IConnection
+  (send [this msg] (send! this msg))
+  (answer [this msg data] (answer! this msg data))
+  (handle-request [this channel raw-data] (com/default-handle-request this channel raw-data))
+  (handle-response-request [this msg] 
+                           (if-let [recv-chan (some-> receive :chan)]
+                             (>!! recv-chan {:message msg})
+                             (println "Cannot receive message in server client" (:id this) "b/c websocket is closed")))
+  (register-connection [this id channel] (println "register-connection in server client not yet implemented"))
+  (add-service [this name handler-fn] (add-service! this name handler-fn))
+  (lookup-handler [this action] (get-in this [:services action])))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -29,23 +35,6 @@
 ; (ws/send-msg [conn message])
 ; (ws/close [conn])
 ; (ws/client [] [uri])
-
-(defn- receive-msg
-  "Will
-  1. parse msg-string into map
-  2. lookup channels registered under the in-response-to message id
-  3. if expect-more-responses is falsish remove and close channel"
-  [ws-chan msg-string]
-  (let [msg (json/read-str msg-string :key-fn keyword)]
-    (>!! ws-chan msg))
-;   (try (let [{:keys [in-response-to expect-more-responses], :as msg}
-;              (json/read-str msg-string :key-fn keyword)]
-;          (when-let [c (get @receive-channels in-response-to)]
-;           (>!! c msg)
-;           (if-not expect-more-responses
-;              (remove-channel! in-response-to))))
-;     (catch Exception e (println "Error receiving message " msg-string)))
-  )
 
 (defn- create-ws-connection
   "options to ws/connect:
@@ -65,53 +54,61 @@
   :client – an optional WebSocketClient instance to be used for connection
   establishment; by default, a new one is created internally on each call.
   gniazdo.core/connect returns an opaque representation of the connection."
-  [url ws-chan]
+  [id url ws-chan]
   (let [url (s/replace url #"^http" "ws")]
     (ws/connect url
-                :on-receive (fn [msg-string]
-                              (let [msg (json/read-str msg-string :key-fn keyword)]
-                                (>!! ws-chan {:message msg})))
+                :on-receive (fn [msg-string] (com/handle-request (find-connection id) ws-chan msg-string))
                 :on-error (fn [err] (>!! ws-chan {:error err}))
                 :on-close (fn [err _] (close! ws-chan))
                 :headers {"sec-websocket-protocol" ["lively-json"]})))
 
 (defn- ws-connect!
-  [{:keys [host port path protocol],
+  [{:keys [id host port path protocol],
     :or {host "0.0.0.0", port 8080, path "/ws", protocol "ws"}}]
   (let [url (str protocol "://" host ":" port path)
-        ws-chan (chan)
-        recv-chan (pub ws-chan (comp :in-response-to :message))]
-    {:socket (create-ws-connection url ws-chan)
+        ws-chan (chan)]
+    {:socket (create-ws-connection id url ws-chan)
      :chan ws-chan
-     :receiver recv-chan}))
+     :pub (pub ws-chan (comp :in-response-to :message))}))
 
 (defn ensure-connection!
   [& {:keys [id], :as opts}]
   (if-let [c (find-connection id)]
     c
     (let [id (str (UUID/randomUUID))
-          c {:id id, :ws (ws-connect! opts)}]
+          {:keys [chan pub] :as ws} (ws-connect! (assoc opts :id id))
+          c (map->Connection {:id id,
+                              :ws ws
+                              :receive {:chan chan :pub pub}
+                              :services (com/default-services)})]
       (swap! connections assoc id c)
       c)))
 
 (defn stop!
   [{:keys [ws id] :as con}]
   (some-> ws :socket ws/close)
+  (some-> ws :chan close!)
   (swap! connections dissoc id))
 
 (defn stop-all!
   []
   (doseq [[_ c] @connections] (stop! c)))
 
-(defn send!
+(defn- send!
   "sends message via websocket and returns a channel that will receive answer
   messages matching the message id of the sent message. client facing channel
   will close when there are no more answers to be expected."
-  [{ws :ws, :as con} msg]
-  (let [{msg-id :id} (com/send! #(ws/send-msg (:socket ws) (json/write-str %)) con msg)
+  [{:keys [receive ws], :as con} msg
+   & {:keys [expect-more-responses], :or {expect-more-responses false}}]
+  (let [{msg-id :id, :as msg} (com/send-msg con msg expect-more-responses)
+        sub-chan (sub (:pub receive) msg-id (chan))
         client-chan (chan)
-        sub-chan (sub (:receiver ws) msg-id (chan))
         close (fn [] (close! sub-chan) (close! client-chan))]
+    
+    ; real send
+    (ws/send-msg (:socket ws) (json/write-str msg))
+    
+    ; wait for responses
     (go-loop []
       (let [{:keys [message error] :as msg} (<! sub-chan)]
         (if msg (>! client-chan msg))
@@ -122,6 +119,19 @@
           :default (recur))))
     client-chan))
 
-(defn answer!
- [{ws :ws, :as con} msg data]
-  (com/answer! #(ws/send-msg (:socket ws) (json/write-str %)) con msg data))
+(defn- answer!
+  [{ws :ws, :as con} msg data
+   & {:keys [expect-more-responses], :or {expect-more-responses false}}]
+  (let [msg (com/answer-msg con msg data expect-more-responses)]
+    (ws/send-msg (:socket ws) (json/write-str msg))
+    msg))
+
+; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+(defn- add-service!
+  [{:keys [id] :as client} name handler-fn]
+  (let [client (map->Connection
+                 (update-in client [:services]
+                            assoc name handler-fn))]
+    [client id name]
+    (swap! connections assoc id client)))

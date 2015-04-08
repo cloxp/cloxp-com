@@ -1,4 +1,4 @@
-var testTimeout = 30*1000; // ms
+var testTimeout = 20*1000; // ms
 var fs = require('fs');
 var page = require('webpage').create();
 
@@ -11,7 +11,8 @@ var url = "file://" + fs.workingDirectory + "/public/run-tests.html";
 page.open(url, function (status) {
   setInterval(function() {
     var result = page.evaluateJavaScript("window.cljs_tests_done");
-    if (!result) return;
+    if (!result || result.test === 0) return;
+    console.log("slimer thinks tests are done");
     var success = result.fail === 0 && result.error === 0;
     slimer.exit(success ? 0 : 1);
   }, 100);

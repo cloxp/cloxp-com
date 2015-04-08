@@ -1,22 +1,18 @@
-(ns rksm.websocket-test.client-test
+(ns rksm.websocket-test.browser-client-test
   (:require [clojure.core.async :as async :refer [go go-loop <!! >!! thread]]
             [rksm.cloxp-projects.lein :as lein]
             [rksm.subprocess :as subp]
             [rksm.websocket-test.server :as server]
-            [rksm.websocket-test.client :as client]
             [clojure.test :refer :all]))
 
-(def ^:dynamic *client*)
 (def ^:dynamic *server*)
 
 (defn fixture [test]
-  (binding [*server* (server/ensure-server! :port 8082)
-            *client* (client/ensure-connection! :port 8082)]
+  (binding [*server* (server/ensure-server! :port 8082)]
     (test))
   (do
     (doseq [s @server/servers]
-      (server/stop-server! s)
-      (client/stop-all!))))
+      (server/stop-server! s))))
 
 (use-fixtures :each fixture)
 
@@ -33,11 +29,20 @@
     (->> (apply subp/async-proc))))
 
 (deftest all-cljs-tests
-  (let [proc (run-cljs-tests)]
-    (subp/wait-for proc)
-    (is (= 0 (subp/exit-code proc)))
-    (is (re-find #"Testing complete: 0 failures, 0 errors."
-                 (subp/stdout proc)))))
+  (let [proc (run-cljs-tests)
+        _ (subp/wait-for proc)
+        code (subp/exit-code proc)
+        out (subp/stdout proc)
+        [_ test pass fail error]
+        (re-find #":test ([0-9]+), :pass ([0-9]+), :fail ([0-9]+), :error ([0-9]+)" out)
+        [test pass fail error] (->> [test pass fail error]
+                                 (map #(or % "nil"))
+                                 (map read-string))]
+    (println [test pass fail error])
+    (is (= 0 code))
+    (is (= 0 fail))
+    (is (= 0 error))))
 
 (comment
- (test-ns *ns*))
+ (test-ns *ns*)
+ )
