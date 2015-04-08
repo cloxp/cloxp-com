@@ -4,7 +4,7 @@
             :url "http://opensource.org/licenses/MIT"}
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
-                 [org.clojure/clojurescript "0.0-3031"]                 
+                 [org.clojure/clojurescript "0.0-3126"]
                  [http-kit "2.1.19"]
                  [compojure/compojure "1.3.2"]
                  [javax.servlet/servlet-api "2.5"]
