@@ -1,4 +1,4 @@
-(ns rksm.websocket-test.async-util
+(ns rksm.cloxp-com.async-util
   (:require [cljs.core.async :refer [<! >! put! close! chan pub sub]])
   (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
 

@@ -1,10 +1,10 @@
-(ns rksm.websocket-test.net
+(ns rksm.cloxp-com.net
   (:require [chord.client :refer [ws-ch]]
             [cljs.core.async :refer [<! >! put! close! chan sub pub]]
             [cljs-uuid-utils :as uuid]
             [cognitect.transit :as t]
-            [rksm.websocket-test.messenger :as m]
-            [rksm.websocket-test.eval :as eval])
+            [rksm.cloxp-com.messenger :as m]
+            [rksm.cloxp-com.eval :as eval])
   (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
 
 (def debug true)

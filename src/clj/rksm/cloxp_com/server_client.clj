@@ -1,9 +1,9 @@
-(ns rksm.websocket-test.server-client
+(ns rksm.cloxp-com.server-client
   (:refer-clojure :exclude [send])
   (:require [gniazdo.core :as ws]
             [clojure.string :as s]
             [clojure.data.json :as json]
-            [rksm.websocket-test.messenger :as m]
+            [rksm.cloxp-com.messenger :as m]
             [clojure.core.async :as async :refer [>!! >!! <! <!! chan go go-loop sub pub close!]]))
 
 (defrecord MessengerImpl [url sock ws-chan]

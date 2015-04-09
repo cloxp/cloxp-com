@@ -1,7 +1,7 @@
-(ns rksm.websocket-test.server-test
-  (:require [rksm.websocket-test.server :as server]
-            [rksm.websocket-test.messenger :as m]
-            [rksm.websocket-test.server-client :as client]
+(ns rksm.cloxp-com.server-test
+  (:require [rksm.cloxp-com.server :as server]
+            [rksm.cloxp-com.messenger :as m]
+            [rksm.cloxp-com.server-client :as client]
             [clojure.test :refer :all]
             [org.httpkit.client :as http-client]
             [clojure.core.async :as async :refer [<!! >!! chan go]]))
@@ -65,7 +65,7 @@
                 {:target (:id *server*)
                  :action "add-service"
                  :data {:name "adder"
-                        :handler (str '(fn [con msg] (rksm.websocket-test.messenger/answer con msg (-> msg :data (+ 1)) false)))}}))]
+                        :handler (str '(fn [con msg] (rksm.cloxp-com.messenger/answer con msg (-> msg :data (+ 1)) false)))}}))]
       (is (nil? (some-> add-answer :message :data :error)))))
 
   (testing "call handler"
@@ -77,7 +77,7 @@
 
 (deftest streaming-response-test
   (let [handler '(do
-                   (require '[rksm.websocket-test.messenger :as m])
+                   (require '[rksm.cloxp-com.messenger :as m])
                    (fn [con msg]
                      (m/send con (m/prep-answer-msg con msg 1 true))
                      (m/send con (m/prep-answer-msg con msg 2 true))

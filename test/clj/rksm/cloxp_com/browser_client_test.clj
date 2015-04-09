@@ -1,8 +1,8 @@
-(ns rksm.websocket-test.browser-client-test
+(ns rksm.cloxp-com.browser-client-test
   (:require [clojure.core.async :as async :refer [go go-loop <!! >!! thread]]
             [rksm.cloxp-projects.lein :as lein]
             [rksm.subprocess :as subp]
-            [rksm.websocket-test.server :as server]
+            [rksm.cloxp-com.server :as server]
             [clojure.test :refer :all]))
 
 (def ^:dynamic *server*)

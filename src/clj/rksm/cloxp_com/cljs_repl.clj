@@ -1,9 +1,9 @@
-(ns rksm.websocket-test.cljs-repl
+(ns rksm.cloxp-com.cljs-repl
   (:require [cljs.repl :as repl]
             [cljs.analyzer :as ana]
             [cljs.env :as env]
-            [rksm.websocket-test.server :as server]
-            [rksm.websocket-test.messenger :as msg]
+            [rksm.cloxp-com.server :as server]
+            [rksm.cloxp-com.messenger :as msg]
             [clojure.core.async :refer [>!! <!! >! <! go]]))
 
 (defrecord CloxpCljsReplEnv [server client-id]

@@ -1,5 +1,5 @@
-(ns rksm.websocket-test.eval
-  (:require [rksm.websocket-test.messenger :as m]))
+(ns rksm.cloxp-com.eval
+  (:require [rksm.cloxp-com.messenger :as m]))
 
 (defn eval-js
   [code]

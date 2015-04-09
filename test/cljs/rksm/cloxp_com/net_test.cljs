@@ -1,12 +1,10 @@
-(ns ^{:figwheel-always true
-      :doc "See rksm.websocket-test.client-test for how running these tests as
-      part of the server tests"} rksm.websocket-test.net-test
-  (:require [rksm.websocket-test.net :as net]
-            [rksm.websocket-test.messenger :as m]
+(ns ^{:doc "See rksm.cloxp-com.browser-client-test for how running these tests as
+      part of the server tests"} rksm.cloxp-com.net-test
+  (:require [rksm.cloxp-com.net :as net]
+            [rksm.cloxp-com.messenger :as m]
             [cljs.core.async :refer [<! >! put! close! chan pub sub timeout]]
-            [rksm.websocket-test.async-util :refer [join]]
+            [rksm.cloxp-com.async-util :refer [join]]
             [cognitect.transit :as t]
-            [figwheel.client :as fw]
             [cemerick.cljs.test :refer [testing-complete?]])
   (:require-macros [cljs.core.async.macros :refer [go go-loop]]
                    [cemerick.cljs.test :refer [is deftest testing use-fixtures done run-tests]]))
@@ -21,7 +19,7 @@
 
 (defn start-tests []
   (let [done-chan (chan)
-        test-env (run-tests 'rksm.websocket-test.net-test)]
+        test-env (run-tests 'rksm.cloxp-com.net-test)]
     (go-loop []
       (if (testing-complete? test-env)
         (>! done-chan test-env)
@@ -46,7 +44,7 @@
   (go
    (let [{id :id, :as c} (<! (net/connect url))
          stream-handler '(do
-                           (require '[rksm.websocket-test.messenger :as m])
+                           (require '[rksm.cloxp-com.messenger :as m])
                            (fn [con msg]
                              (m/send con (m/prep-answer-msg con msg 1 true))
                              (m/send con (m/prep-answer-msg con msg 2 true))
@@ -66,7 +64,7 @@
   (go
    (let [send-new-message-handler
          '(do
-            (require '[rksm.websocket-test.messenger :as m])
+            (require '[rksm.cloxp-com.messenger :as m])
             (require '[clojure.core.async :as async])
             (fn [con {:keys [data] :as msg}]
               (m/answer con msg :OK false)
@@ -114,9 +112,3 @@
    (println result)
    (<! (timeout 100))
    (set! (.-cljs_tests_done js/window) (clj->js result))))
-
-; registered-test-hooks
-; (fw/start {
-;   :websocket-url   "ws://localhost:3449/figwheel-ws"
-;   :on-jsload (fn [] (print "reloaded"))
-; })

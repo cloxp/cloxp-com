@@ -1,4 +1,4 @@
-(ns rksm.websocket-test.l2l-test
+(ns rksm.cloxp-com.l2l-test
   (:require-macros [cemerick.cljs.test :refer (is deftest run-tests testing test-var)])
   (:require [cemerick.cljs.test :as t]))
 
@@ -7,4 +7,4 @@
 
 (enable-console-print!)
 
-(run-tests 'rksm.websocket-test.l2l-test)
+(run-tests 'rksm.cloxp-com.l2l-test)

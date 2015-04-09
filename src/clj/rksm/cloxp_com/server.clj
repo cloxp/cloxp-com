@@ -1,11 +1,11 @@
-(ns rksm.websocket-test.server
+(ns rksm.cloxp-com.server
   (:refer-clojure :exclude [send])
   (:require [compojure.route :as route]
             [compojure.handler :as handler]
             [org.httpkit.server :as http]
             [compojure.core :refer [defroutes GET POST DELETE ANY context]]
             [clojure.data.json :as json]
-            [rksm.websocket-test.messenger :as m]
+            [rksm.cloxp-com.messenger :as m]
             [clojure.core.async :as async :refer [>!! >! <! chan go go-loop sub pub close! put!]]))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

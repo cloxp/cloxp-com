@@ -1,4 +1,4 @@
-(ns rksm.websocket-test.messenger
+(ns rksm.cloxp-com.messenger
   (:refer-clojure :exclude [send])
   (:require #+clj [clojure.core.async :refer [>! <! chan go go-loop sub pub close!]]
             #+cljs [cljs.core.async :refer [<! >! put! close! chan sub pub]]
