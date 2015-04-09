@@ -1,4 +1,7 @@
-# fooo
+# cloxp-com
+
+A leightweight RPC-like framework, modeled after (and compatible to)
+lively-2-lively. Basis for cljs repl and inter-system communication in cloxp.
 
 # LICENSE
 
