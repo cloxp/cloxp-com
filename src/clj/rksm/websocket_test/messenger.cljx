@@ -1,12 +1,14 @@
 (ns rksm.websocket-test.messenger
   (:refer-clojure :exclude [send])
   (:require [rksm.websocket-test.com :as com]
-            [clojure.core.async :refer [>! <! chan go go-loop sub pub close!]]
+            #+clj [clojure.core.async :refer [>! <! chan go go-loop sub pub close!]]
+            #+cljs [cljs.core.async :refer [<! >! put! close! chan sub pub]]
             #+cljs [cljs-uuid-utils :as uuid]
             #+clj [clojure.data.json :as json])
+  #+cljs (:require-macros [cljs.core.async.macros :refer [go go-loop]])
   #+clj (:import (java.util UUID)))
 
-(declare default-services)
+(declare default-services handle-incoming-message)
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; helper
@@ -28,10 +30,28 @@
   #+clj (json/write-str obj))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; messages
+
+(defn prep-send-msg
+  [{:keys [id] :as sender} msg expect-more?]
+  (cond->> msg
+    true (merge {:sender id, :id (uuid)})
+    expect-more? (merge {:expect-more-responses true})))
+
+(defn prep-answer-msg
+  [responder {:keys [id action sender] :as msg} data expect-more?]
+  (prep-send-msg responder {:in-response-to id
+                            :target sender
+                            :action (str action "-response")
+                            :data data}
+                 expect-more?))
+
+; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; interfaces
 
 (defprotocol IReceiver
-  (receive-chan [this]))
+  (receive-chan [this])
+  (stop-receiver [this]))
 
 (defprotocol ISender
   (send-message [this msg]))
@@ -40,15 +60,18 @@
   (send [this msg])
   (answer [this msg data more-answers?])
   (add-service [this name handler-fn])
-  (lookup-handler [this action]))
+  (lookup-handler [this action])
+  (stop [this]))
 
-(defrecord Messenger [id services responses impl]
+(defrecord Messenger [name id services responses impl]
+  Object
+  (toString [this] (str "<" name ":" (.substring id 0 5) "...>"))
+
   IMessenger
-  
   (send [{:keys [impl], :as this} msg]
         (let [{msg-id :id, :as msg} (com/send-msg this msg false)
               sub-chan (sub (:pub responses) msg-id (chan))
-            ;   sub-chan (receive-msg-sub-chan impl msg-id)
+              ;   sub-chan (receive-msg-sub-chan impl msg-id)
               client-chan (chan)
               close (fn [] (close! sub-chan) (close! client-chan))]
           
@@ -74,27 +97,29 @@
   (add-service [{:keys [services] :as this} name handler-fn]
                (swap! services assoc name handler-fn))
   
-  (lookup-handler [{:keys [services] :as this} action] (some-> services deref (get action))))
+  (lookup-handler [{:keys [services] :as this} action] (some-> services deref (get action)))
+  
+  (stop [this] (stop-receiver impl) (-> responses :chan close!)))
 
 (defn create-messenger
-  [impl]
+  [name impl]
   (let [id (uuid)
         response-chan (chan)
-        messenger (map->Messenger {:id id
+        messenger (map->Messenger {:name name
+                                   :id id
                                    :services (atom (default-services))
                                    :responses {:chan response-chan
                                                :pub (pub response-chan (comp :in-response-to :message))}
                                    :impl impl})]
     (go-loop []
       (let [{:keys [raw-msg connection closed error] :as received} (<! (receive-chan impl))]
-        [raw-msg connection closed error received]
         (cond
           (nil? received) (do
-                            (println "Receiver channel closed! Closing messenger " id)
-                            (close! response-chan))
+                            ; (println "Receiver channel closed! Closing messenger " id)
+                            (stop messenger))
           closed (do
                 ;   (println "Messenger" id "closed:" closed)
-                   (close! response-chan))
+                   (stop messenger))
           error (do
                   (println "Messenger" id "got error while receiving messenges:" error)
                   (recur))
@@ -153,7 +178,7 @@
   (let [msg (if (string? raw-data) (json->clj raw-data) raw-data)
         {:keys [target action]} msg
         handler (lookup-handler messenger action)
-        messenger (assoc messenger :connection connection)]
+        messenger (update-in messenger [:impl] assoc :connection connection)]
     (cond
       (contains? msg :in-response-to) (handle-response-message messenger msg)
       (= action "info") (answer-with-info messenger msg)

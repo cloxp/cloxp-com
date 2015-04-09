@@ -5,111 +5,75 @@
             [org.httpkit.server :as http]
             [compojure.core :refer [defroutes GET POST DELETE ANY context]]
             [clojure.data.json :as json]
-            [rksm.websocket-test.com :as com]
-            [clojure.core.async :as async :refer [>! <! chan go go-loop sub pub close! put!]]))
+            [rksm.websocket-test.messenger :as m]
+            [clojure.core.async :as async :refer [>!! >! <! chan go go-loop sub pub close! put!]]))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 (defonce log (agent []))
 
+(def debug false)
+
 (defn log-req
   [app]
   (fn [req]
-    (let [{:keys [server-port content-length websocket?
-                  content-type uri server-name scheme
-                  request-method]} req]
-      (println (format "%s %s://%s:%s%s (%s, %s)"
-                       (.toUpperCase (name request-method))
-                       (name scheme) server-name server-port uri
-                       content-length content-type)))
+    (if debug
+      (let [{:keys [server-port content-length websocket?
+                    content-type uri server-name scheme
+                    request-method]} req]
+        (println (format "%s %s://%s:%s%s (%s, %s)"
+                         (.toUpperCase (name request-method))
+                         (name scheme) server-name server-port uri
+                         content-length content-type))))
     (app req)))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; server connection, sending / receiving
 
-(declare find-server-by-host-and-port handle-service-request!
-         send! answer!
-         add-service!
-         register-channel find-channel channels)
+(declare register-channel find-channel app)
 
-(defrecord Connection [id stop port host services receive]
-  com/IConnection
-  (send [this msg] (send! this msg))
-  (answer [this msg data] (answer! this msg data))
-  (handle-request [this channel raw-data] (com/default-handle-request this channel raw-data))
-  (handle-response-request [this msg] (go (>! (:chan receive) {:message msg})))
-  (register-connection [this id channel]
-                       (register-channel this id channel))
-  (add-service [this name handler-fn] (add-service! this name handler-fn))
-  (lookup-handler [this action] (get-in this [:services action])))
+(defrecord MessengerImpl [host port stop-fn receive-channel]
+  m/IReceiver
+  (receive-chan [this] receive-channel)
+  (stop-receiver [this] 
+                 (close! receive-channel)
+                 (stop-fn :timeout 100))
+  m/ISender
+  (send-message [this msg]
+                (if-let [c (or (some-> this :connection :channel)
+                               (-> msg :target find-channel))]
+                  (http/send! c (json/write-str msg))
+                  (throw (Exception. (str "Cannot find channel for target " (:target msg)))))))
 
-(defn- send!
-  [{:keys [channel receive], :as con} msg
-   & {:keys [expect-more-responses] :or {expect-more-responses false}}]
-  (let [{msg-id :id, target :target, :as msg} (com/send-msg con msg expect-more-responses)
-        sub-chan (sub (:pub receive) msg-id (chan))
-        client-chan (chan)
-        close (fn [] (close! sub-chan) (close! client-chan))]
-
-    ; real send
-    (if-let [c (or channel (find-channel target))]
-      (http/send! c (json/write-str msg))
-      (throw (Exception. (str "Cannot find channel for target " target))))
-
-    ; wait for responses
-    (go-loop []
-      (let [{:keys [message error] :as msg} (<! sub-chan)]
-        (if msg (>! client-chan msg))
-        (cond
-          (nil? msg) (close)
-          error (close)
-          (not (:expect-more-responses message)) (close)
-          :default (recur))))
-    client-chan))
-
-(defn- answer!
-  [{:keys [channel], :as con} msg data
-   & {:keys [expect-more-responses]
-      :or {expect-more-responses false}}]
-  (let [{:keys [target] :as answer-msg} (com/answer-msg con msg data expect-more-responses)
-        c (or channel (find-channel target))]
-    (if-not c (throw (Exception. (str "Cannot find channel for target " target))))
-    (http/send! c (json/write-str answer-msg))
-    answer-msg))
+(defn create-messenger
+  [& {:keys [port host], :or {port 8081 host "0.0.0.0"} :as opts}]
+  (let [stop (http/run-server #'app {:port port :host host})
+        messenger (m/create-messenger "server-messenger"
+                                      (->MessengerImpl host port stop (chan)))]
+    (m/add-service messenger "register"
+                   (fn [server msg]
+                     (if-let [c (some-> server :impl :connection :channel)]
+                       (do
+                         (register-channel server (:sender msg) c)
+                         (m/answer server msg :OK false))
+                       (m/answer server msg :error "Registering channel failed"))))
+    messenger))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; routing
 
-(defn app-simple-http [req]
-  {:status 200
-  :headers {"Content-Type" "text/html"}
-  :body    "hello2 HTTP!"} )
-
-(defn app-streaming-response [req]
-  (http/with-channel req ch
-    (future
-     (Thread/sleep 1000)
-     (http/send! ch {:status 200
-                :headers {"Content-Type" "text/html"}
-                :body "fooo abbbrrrr"}))))
-
-(defn app-websocket-echo [req]
-  (http/with-channel req channel
-    (http/on-close channel (fn [status]
-                             (println "[app-websocket-echo] channel closed" status)))
-    (if (http/websocket? channel)
-      (println "WebSocket channel")
-      (println "HTTP channel"))
-    (http/on-receive channel (fn [data]
-                               (http/send! channel data)))))
+(declare find-server-by-host-and-port)
 
 (defn websocket-service-handler [req]
   (http/with-channel req channel
-    (http/on-receive channel (fn [data]
-                               (let [{host :server-name, port :server-port} req
-                                     server (find-server-by-host-and-port :host host :port port)]
-                                 (com/handle-request server channel data))))))
-
-; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    (http/on-receive 
+     channel
+     (fn [data]
+       (let [{host :server-name, port :server-port} req
+             server (find-server-by-host-and-port :host host :port port)]
+         (-> server
+           :impl m/receive-chan
+           (>!! {:raw-msg data, :connection {:req req, :channel channel}})))))))
 
 (defroutes all-routes
 ;   (GET "/" [] show-landing-page)
@@ -117,27 +81,29 @@
   (route/files "/" {:root "./public" :allow-symlinks? true})
   (route/not-found "<p>Page not found.</p>"))
 
-(def app
-  (-> all-routes log-req))
+(def app (-> all-routes log-req))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 (defonce servers (atom []))
 
+(defn host [server] (-> server :impl :host))
+
+(defn port [server] (-> server :impl :port))
+
 (defn find-server-by-host-and-port
-  [& {:keys [host port]}]
+  [& {h :host, p :port}]
   (or (->> @servers
-        (filter #(= {:host host, :port port} (select-keys % [:host :port])))
+        (filter #(= [p h] ((juxt port host) %)))
         first)
-      (if (= host "localhost")
-        (find-server-by-host-and-port :host "0.0.0.0" :port port))))
+      (if (= h "localhost")
+        (find-server-by-host-and-port :host "0.0.0.0" :port p))))
 
 (defn stop-server!
   [server]
   (when-not (nil? server)
-    (let [stop (:stop server)]
-      (stop :timeout 100)
-      (swap! servers #(filter (fn [s] (not= s server)) %)))))
+    (m/stop server)
+    (swap! servers #(filter (fn [s] (not= s server)) %))))
 
 (defn stop-all-servers!
   []
@@ -145,16 +111,7 @@
 
 (defn start-server!
   [& {:keys [port host], :or {port 8081 host "0.0.0.0"} :as opts}]
-  (let [stop (http/run-server #'app {:port port :host host})
-        receive-chan (chan)
-        s (map->Connection
-            {:id (str (java.util.UUID/randomUUID))
-             :stop stop
-             :port port
-             :host host
-             :services (com/default-services)
-             :receive {:chan receive-chan
-                       :pub (pub receive-chan (comp :in-response-to :message))}})]
+  (let [s (create-messenger :host host :port port)]
     (swap! servers conj s)
     s))
 
@@ -164,17 +121,6 @@
     (or (find-server-by-host-and-port :host host :port port)
         (apply start-server! opts))))
 
-; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-; services
-
-(defn- add-service!
-  [{id :id :as server} name handler]
-  (let [old-server (first (filter #(= id (:id %)) @servers))]
-    (assert old-server (str "server with id " id " not found"))
-    (let [server (map->Connection
-                   (update-in old-server [:services]
-                              assoc name handler))]
-      (swap! servers (partial replace {old-server server})))))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; client channel management
@@ -196,11 +142,4 @@
 (comment
  (start-server! :port 8082)
  (stop-all-servers!)
-
- (let [s (first @servers)] (add-service! s "echo" echo-service-handler))
-
- (stop-all-servers!)
- (stop-server (first @servers))
- (-> (first @servers) .)
- servers
  )

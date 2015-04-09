@@ -25,7 +25,7 @@
 
   (testing "server data"
     (is (= [8082 "0.0.0.0"]
-           ((juxt :port :host) *server*)))
+           ((juxt server/port server/host) *server*)))
     (is (contains? *server* :id)))
 
   (testing "simple GET"
@@ -42,7 +42,7 @@
 
 (deftest add-a-service
   (let [received (promise)]
-    (com/add-service *server* "test-service" (fn [con msg]  (deliver received msg)))
+    (m/add-service *server* "test-service" (fn [con msg]  (deliver received msg)))
     (m/send *client* {:target (:id *server*) :action "test-service" :data "test"})
     (let [{:keys [data id sender target]} (deref received 200 nil)]
       (is (= "test" data))
@@ -66,7 +66,7 @@
                 {:target (:id *server*)
                  :action "add-service"
                  :data {:name "adder"
-                        :handler (str '(fn [con msg] (rksm.websocket-test.com/answer con msg (-> msg :data (+ 1)))))}}))]
+                        :handler (str '(fn [con msg] (rksm.websocket-test.messenger/answer con msg (-> msg :data (+ 1)) false)))}}))]
       (is (nil? (some-> add-answer :message :data :error)))))
 
   (testing "call handler"
@@ -78,19 +78,17 @@
 
 (deftest streaming-response-test
   (let [handler '(do
-                   (require '[rksm.websocket-test.com :as com])
+                   (require '[rksm.websocket-test.messenger :as m])
                    (fn [con msg]
-                     (println "starting to stream")
-                     (com/send con (com/answer-msg con msg 1 true))
-                     (com/send con (com/answer-msg con msg 2 true))
-                     (com/send con (com/answer-msg con msg 3 false))
-                     (println "streaming ended")))
+                     (m/send con (m/prep-answer-msg con msg 1 true))
+                     (m/send con (m/prep-answer-msg con msg 2 true))
+                     (m/send con (m/prep-answer-msg con msg 3 false))))
         _ (<!! (m/send
                 *client*
                 {:target (:id *server*)
                  :action "add-service"
                  :data {:name "stream" :handler (str handler)}}))
-        recv (m/send *client* {:target (:id *server*) :action "stream" :data 3})
+        recv (m/send *client* {:target (:id *server*) :action "stream"})
         data (loop [respones []]
                (if-let [next (-> (<!! recv) :message :data)]
                  (recur (conj respones next))
@@ -109,14 +107,11 @@
   (m/add-service *client* "add-something"
                    (fn [con msg] (m/answer con msg (+ 23 (:data msg)) false)))
   (let [{{:keys [data error]} :message}
-        (<!! (com/send *server* {:target (:id *client*) :action "add-something" :data 2}))]
+        (<!! (m/send *server* {:target (:id *client*) :action "add-something" :data 2}))]
     (is (nil? (or error (:error data))))
     (is (= 25 data))))
 
 (comment
-
  (test-ns *ns*)
-
- (clojure.test/test-var #'echo-service-test)
- (clojure.test/test-var #'create-a-ws-server)
- (server/stop-all-servers!))
+ (server/stop-all-servers!)
+ )
