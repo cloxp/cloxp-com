@@ -3,7 +3,8 @@
             [cljs.core.async :refer [<! >! put! close! chan sub pub]]
             [cljs-uuid-utils :as uuid]
             [cognitect.transit :as t]
-            [rksm.websocket-test.messenger :as m])
+            [rksm.websocket-test.messenger :as m]
+            [rksm.websocket-test.eval :as eval])
   (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
 
 (def debug true)
@@ -78,10 +79,11 @@
                         (or error "establish server channel failed"))]
            (.error js/console msg)
            (>! result-chan {:error msg}))
-         (>! result-chan
-             (m/create-messenger
-              "browser-client"
-              (->MessengerImpl url tracker-id send-channel receive-channel))))))
+         (let [messenger (m/create-messenger
+                          "browser-client"
+                          (->MessengerImpl url tracker-id send-channel receive-channel))]
+           (m/add-service messenger "eval-js" eval/eval-js-service)
+           (>! result-chan messenger)))))
     result-chan))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

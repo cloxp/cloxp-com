@@ -128,27 +128,31 @@
     messenger))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-; services
+; services and message handling
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 (defn answer-message-not-understood
   [receiver msg]
   (answer receiver msg {:error "messageNotUnderstood"} false))
 
-(defn answer-with-info
-  [{id :id, :as receiver} msg]
-  (answer receiver msg {:id id} false))
+(defn- handle-target-not-found
+  [receiver {:keys [target action] :as msg}]
+  (let [err (str "cannot forward message " action " to target " target)]
+    (println err)
+    (answer receiver msg {:error err} false)))
 
-(defn echo-service-handler
+(defn- info-service-handler
+  [{id :id, :as receiver} msg]
+  (answer receiver msg
+          {:id id,
+           :services (-> receiver :services deref keys)}
+          false))
+
+(defn- echo-service-handler
   [receiver msg]
   (answer receiver msg (:data msg) false))
 
-#_(defn registry-handler
-  [{:keys [connection] :as receiver} {:keys [sender] :as msg}]
-  (register-connection receiver sender connection)
-  (answer receiver msg "OK" false))
-
-(defn add-service-handler
+(defn- add-service-handler
   [receiver {{:keys [name handler]} :data, :as msg}]
   (add-service receiver name (eval (read-string handler)))
   (answer receiver msg "OK" false))
@@ -157,36 +161,28 @@
   []
   {"echo" echo-service-handler
    "add-service" add-service-handler
-;   "register" registry-handler
-   })
+   "info" info-service-handler})
 
-
-; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-; handling incoming messanges
-; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
-(defn handle-response-message 
- [{:keys [responses] :as messenger} msg] 
-  (go (>! (:chan responses) {:message msg}))
+(defn- handle-response-message 
+  [{:keys [responses] :as messenger} msg] 
+  (go (some-> messenger :responses :chan (>! {:message msg})))
   #_(println "Messenger" (:id messenger) 
-           "cannot receive message b/c receive channel is unavailable"))
+             "cannot receive message b/c receive channel is unavailable"))
 
-(defn handle-incoming-message
+(defn- handle-incoming-message
   [messenger connection raw-data]
   ; FIXME: validate raw-data!
   (let [msg (if (string? raw-data) (json->clj raw-data) raw-data)
         {:keys [target action]} msg
         handler (lookup-handler messenger action)
+        ; FIXME make dynamic var for current connection?
         messenger (update-in messenger [:impl] assoc :connection connection)]
     (cond
       (contains? msg :in-response-to) (handle-response-message messenger msg)
-      (= action "info") (answer-with-info messenger msg)
-      (not= (:id messenger) target) (do
-                                      (println "message" action "has not target id")
-                                      (answer-message-not-understood messenger msg))
+      (and target (not= (:id messenger) target)) (handle-target-not-found messenger msg)
       (nil? handler) (answer-message-not-understood messenger msg)
       :default (try (handler messenger msg)
-                 (catch Exception e
+                 (catch #+clj Exception #+cljs js/Error e
                    (do
                      (println "Error handling service request " name ":\n" e)
                      (answer messenger msg {:error (str e)} false)))))))

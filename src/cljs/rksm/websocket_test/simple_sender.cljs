@@ -1,6 +1,7 @@
 (ns rksm.websocket-test.simple-sender
+  (:refer-clojure :exclude [send])
   (:require [rksm.websocket-test.net :as net]
-            [rksm.websocket-test.messenger :as m]
+            [rksm.websocket-test.messenger :refer [answer send]]
             [cljs.core.async :refer [<! >! put! close! chan pub sub]]
             [rksm.websocket-test.async-util :refer [join]]
             [cognitect.transit :as t]
@@ -25,17 +26,33 @@
 
 (println "test 1235")
 
-(let [t1 (js/Date.)]
- (go
-  (let [con (<! (net/connect "ws://localhost:8082/ws"))]
-    (println (<! (m/send con {:action "echo" :data "huhu!"})))
-    (let [t2 (js/Date.)]
-      (println (- t2 t1))
-      (dotimes [_ 10]
-        (do
-          (<! (m/send con {:action "echo" :data "harhahr!"}))
-          (println (- (js/Date.) t2))))))
-  ))
+(defonce cloxp-connection (atom nil))
+
+(defn with-con
+  [do-func]
+  (if-let [c @cloxp-connection]
+    (do-func c)
+    (go
+     (let [c (<! (net/connect "ws://localhost:8082/ws"))]
+       (reset! cloxp-connection c)
+       (do-func c)))))
+
+(defn test-send
+  [con]
+  (go
+   (let [t1 (js/Date.)]
+     (println (<! (send con {:action "echo" :data "huhu!"})))
+     (let [t2 (js/Date.)]
+       (println (- t2 t1))
+       (dotimes [_ 10]
+         (do
+           (<! (send con {:action "echo" :data "harhahr!"}))
+           (println (- (js/Date.) t2))))))))
+
+(with-con
+  (fn [con]
+    (send con {:action "register"})
+    (println "Connected")))
 
 ; (fw/start {
 ;   :websocket-url   "ws://localhost:3449/figwheel-ws"
