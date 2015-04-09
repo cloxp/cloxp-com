@@ -16,7 +16,7 @@
                  [figwheel/figwheel "0.2.5-SNAPSHOT"]
                  [figwheel-sidecar/figwheel-sidecar "0.2.5-SNAPSHOT"]]
   :source-paths ["src/clj" "src/cljs" "target/classes"]
-  :test-paths ["test/clj" "test/cljs" "target/classes"]
+  :test-paths ["test/clj" "test/cljs"]
   :auto-clean false ; for cljx
   :cljx {:builds [{:source-paths ["src/clj" "test/clj" "src/cljs" "test/cljs"]
                    :output-path "target/classes"

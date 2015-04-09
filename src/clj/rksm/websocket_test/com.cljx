@@ -71,6 +71,7 @@
 
 (defn add-service-handler
   [receiver {{:keys [name handler]} :data, :as msg}]
+  (println "adding service " name)
   (add-service receiver name (eval (read-string handler)))
   (answer receiver msg "OK"))
 

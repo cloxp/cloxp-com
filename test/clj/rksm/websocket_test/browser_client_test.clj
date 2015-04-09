@@ -9,10 +9,8 @@
 
 (defn fixture [test]
   (binding [*server* (server/ensure-server! :port 8082)]
-    (test))
-  (do
-    (doseq [s @server/servers]
-      (server/stop-server! s))))
+    (test)
+    (server/stop-server! *server*)))
 
 (use-fixtures :each fixture)
 

@@ -4,10 +4,11 @@
             [clojure.string :as s]
             [clojure.data.json :as json]
             [rksm.websocket-test.com :as com]
+            [rksm.websocket-test.messenger :as m]
             [clojure.core.async :as async :refer [>! >!! <! <!! chan go go-loop sub pub close!]])
   (:import (java.util UUID)))
 
-(declare send! answer! add-service!)
+(declare send! answer! add-service! create-messenger)
 
 (defrecord Connection [id ws receive services]
   com/IConnection
@@ -26,9 +27,20 @@
 
 (defonce connections (atom {}))
 
+(defn opts->url
+  [{:keys [id host port path protocol],
+    :or {host "0.0.0.0", port 8080, path "/ws", protocol "ws"}
+    :as opts}]
+  (let [url (if (string? opts) opts (str protocol "://" host ":" port path))]
+    (s/replace url #"^http" "ws")))
+
 (defn find-connection
   [id]
   (get @connections id))
+
+(defn find-connection-by-url
+  [url]
+  (first (filter #(= url (-> % :impl :url)) @connections)))
 
 ; methods:
 ; (ws/connect [url & options])
@@ -72,6 +84,15 @@
      :pub (pub ws-chan (comp :in-response-to :message))}))
 
 (defn ensure-connection!
+  [& {:keys [url] :as url-or-opts}]
+  (let [url (or url (opts->url url-or-opts))]
+    (if-let [c (some-> url find-connection-by-url)]
+      c
+      (let [{:keys [id] :as c} (create-messenger url)]
+        (swap! connections assoc id c)
+        c))))
+
+#_(defn ensure-connection!
   [& {:keys [id], :as opts}]
   (if-let [c (find-connection id)]
     c
@@ -135,3 +156,27 @@
                             assoc name handler-fn))]
     [client id name]
     (swap! connections assoc id client)))
+
+; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+(defrecord MessengerImpl [url sock ws-chan]
+  m/IReceiver
+  (receive-chan [this] ws-chan)
+  m/ISender
+  (send-message [this msg] (ws/send-msg sock (json/write-str msg))))
+
+(defn create-messenger
+  [url]
+  (let [ws-chan (chan)
+        sock (ws/connect
+              url
+              :on-receive (fn [msg-string] (go (>! ws-chan {:raw-msg msg-string
+                                                            :connection ws-chan})))
+              :on-error (fn [err] (go (>! ws-chan {:error err})))
+              :on-close (fn [code reason]
+                          (go
+                           (>! ws-chan {:closed {:status code :reason reason}})
+                           (close! ws-chan)))
+              :headers {"sec-websocket-protocol" ["lively-json"]})
+        sender-receiver (->MessengerImpl url sock ws-chan)]
+    (m/create-messenger sender-receiver)))
