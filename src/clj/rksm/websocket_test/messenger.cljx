@@ -1,7 +1,6 @@
 (ns rksm.websocket-test.messenger
   (:refer-clojure :exclude [send])
-  (:require [rksm.websocket-test.com :as com]
-            #+clj [clojure.core.async :refer [>! <! chan go go-loop sub pub close!]]
+  (:require #+clj [clojure.core.async :refer [>! <! chan go go-loop sub pub close!]]
             #+cljs [cljs.core.async :refer [<! >! put! close! chan sub pub]]
             #+cljs [cljs-uuid-utils :as uuid]
             #+clj [clojure.data.json :as json])
@@ -69,7 +68,7 @@
 
   IMessenger
   (send [{:keys [impl], :as this} msg]
-        (let [{msg-id :id, :as msg} (com/send-msg this msg false)
+        (let [{msg-id :id, :as msg} (prep-send-msg this msg false)
               sub-chan (sub (:pub responses) msg-id (chan))
               ;   sub-chan (receive-msg-sub-chan impl msg-id)
               client-chan (chan)
@@ -90,7 +89,7 @@
           client-chan))
   
   (answer [{:keys [impl], :as this} msg data more-answers?]
-          (let [msg (com/answer-msg this msg data more-answers?)]
+          (let [msg (prep-answer-msg this msg data more-answers?)]
             (send-message impl msg)
             msg))
   

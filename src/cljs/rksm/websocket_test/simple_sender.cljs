@@ -1,6 +1,6 @@
 (ns rksm.websocket-test.simple-sender
   (:require [rksm.websocket-test.net :as net]
-            [rksm.websocket-test.com :as com]
+            [rksm.websocket-test.messenger :as m]
             [cljs.core.async :refer [<! >! put! close! chan pub sub]]
             [rksm.websocket-test.async-util :refer [join]]
             [cognitect.transit :as t]
@@ -25,17 +25,16 @@
 
 (println "test 1235")
 
-(def con (net/connect "ws://localhost:8082/ws"))
-
 (let [t1 (js/Date.)]
  (go
-  (println (<! (com/send con {:action "echo" :data "huhu!"})))
-  (let [t2 (js/Date.)]
-    (println (- t2 t1))
-    (dotimes [_ 10]
-      (do
-        (<! (com/send con {:action "echo" :data "harhahr!"}))
-        (println (- (js/Date.) t2)))))
+  (let [con (<! (net/connect "ws://localhost:8082/ws"))]
+    (println (<! (m/send con {:action "echo" :data "huhu!"})))
+    (let [t2 (js/Date.)]
+      (println (- t2 t1))
+      (dotimes [_ 10]
+        (do
+          (<! (m/send con {:action "echo" :data "harhahr!"}))
+          (println (- (js/Date.) t2))))))
   ))
 
 ; (fw/start {

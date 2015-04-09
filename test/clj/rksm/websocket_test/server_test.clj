@@ -1,6 +1,5 @@
 (ns rksm.websocket-test.server-test
   (:require [rksm.websocket-test.server :as server]
-            [rksm.websocket-test.com :as com]
             [rksm.websocket-test.messenger :as m]
             [rksm.websocket-test.server-client :as client]
             [clojure.test :refer :all]

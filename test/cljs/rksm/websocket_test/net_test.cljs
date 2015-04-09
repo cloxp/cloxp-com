@@ -2,7 +2,6 @@
       :doc "See rksm.websocket-test.client-test for how running these tests as
       part of the server tests"} rksm.websocket-test.net-test
   (:require [rksm.websocket-test.net :as net]
-            [rksm.websocket-test.com :as com]
             [rksm.websocket-test.messenger :as m]
             [cljs.core.async :refer [<! >! put! close! chan pub sub timeout]]
             [rksm.websocket-test.async-util :refer [join]]

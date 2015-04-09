@@ -3,7 +3,6 @@
             [cljs.core.async :refer [<! >! put! close! chan sub pub]]
             [cljs-uuid-utils :as uuid]
             [cognitect.transit :as t]
-            [rksm.websocket-test.com :as com]
             [rksm.websocket-test.messenger :as m])
   (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
 
