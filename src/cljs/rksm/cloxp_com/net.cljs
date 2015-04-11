@@ -83,6 +83,7 @@
                           "browser-client"
                           (->MessengerImpl url tracker-id send-channel receive-channel))]
            (m/add-service messenger "eval-js" eval/eval-js-service)
+           (m/add-service messenger "load-js" eval/load-js-service)
            (>! result-chan messenger)))))
     result-chan))
 

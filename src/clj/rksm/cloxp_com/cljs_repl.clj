@@ -6,20 +6,26 @@
             [rksm.cloxp-com.messenger :as msg]
             [clojure.core.async :refer [>!! <!! >! <! go]]))
 
+(defn send-to-js
+  [server client-id action data]
+  (let [msg {:target client-id,
+             :action action,
+             :data data}]
+    (if-let [result (->> msg (msg/send server) <!! :message :data)]
+      (update-in result [:status] keyword)
+      {:status :error :value (str "Invalid msg " msg)})))
+
 (defrecord CloxpCljsReplEnv [server client-id]
   repl/IJavaScriptEnv
   (-setup [this opts])
-  (-evaluate [this filename line js] 
-             (let [msg {:target client-id,
-                        :action "eval-js",
-                        :data {:code js
-                               :filename filename
-                               :line line}}]
-               (if-let [result (->> msg (msg/send server) <!! :message :data)]
-                 (update-in result [:status] keyword)
-                 {:status :error :value (str "Invalid msg " msg)})))
-  (-load [this provides url]
-         {:status :error :value :not-yet-implemented})
+  (-evaluate [this filename line js]
+             (send-to-js server client-id
+                         "eval-js" {:code js :filename filename :line line}))
+  (-load [this provides uri]
+         (let [[host port] ((juxt server/host server/port) server)]
+           (send-to-js server client-id
+                      "load-js" {:provides provides :path (str uri)
+                                 :host host :port port})))
   (-tear-down [_]))
 
 (defn default-repl-env
@@ -31,16 +37,25 @@
     (throw (Exception. "No server for cljs-repl found"))))
 
 (defn eval-cljs
-  ([form]
-   (eval-cljs form (default-repl-env)))
-  ([form cloxp-repl-env]
+  ([form opts]
+   (eval-cljs form (default-repl-env) (or opts {})))
+  ([form cloxp-repl-env opts]
+   (let [c-env (or env/*compiler* (env/default-compiler-env))
+         ana-env (merge (ana/empty-env) {:ns 'cljs.user})]
+     (env/with-compiler-env c-env
+       (repl/evaluate-form cloxp-repl-env
+                           ana-env
+                           "<cloxp-cljs-repl>"
+                           form
+                           identity ; wrap-fn
+                           opts)))))
+
+(defn load-namespace
+  ([sym opts]
+   (load-namespace sym (default-repl-env) (or opts {})))
+  ([sym cloxp-repl-env opts]
+   sym
    (let [c-env (env/default-compiler-env)
          ana-env (merge (ana/empty-env) {:ns 'cljs.user})]
      (env/with-compiler-env c-env
-       (cljs.repl/evaluate-form cloxp-repl-env
-                                ana-env
-                                "<cloxp-cljs-repl>"
-                                form
-                                identity ; wrap-fn
-                                {} ; opts
-                                )))))
+       (cljs.repl/load-namespace cloxp-repl-env sym opts)))))

@@ -2,6 +2,7 @@
   (:refer-clojure :exclude [send])
   (:require [compojure.route :as route]
             [compojure.handler :as handler]
+            [compojure.response :as response]
             [org.httpkit.server :as http]
             [compojure.core :refer [defroutes GET POST DELETE ANY context]]
             [clojure.data.json :as json]
@@ -12,7 +13,7 @@
 
 (defonce log (agent []))
 
-(def debug false)
+(def debug true)
 
 (defn log-req
   [app]
@@ -75,9 +76,17 @@
            :impl m/receive-chan
            (>!! {:raw-msg data, :connection {:req req, :channel channel}})))))))
 
+(defn cljs-file-handler
+  [req]
+  (if-let [content (some-> req :params :* ring.util.codec/url-decode rksm.system-files/file)]
+    content
+    (-> (response/render "<span>not here</span>" req)
+      (assoc :status 404))))
+
 (defroutes all-routes
 ;   (GET "/" [] show-landing-page)
   (GET "/ws" [] websocket-service-handler)
+  (GET "/cljs-files/*" [] cljs-file-handler)
   (route/files "/" {:root "./public" :allow-symlinks? true})
   (route/not-found "<p>Page not found.</p>"))
 
@@ -88,7 +97,6 @@
 (defonce servers (atom []))
 
 (defn host [server] (-> server :impl :host))
-
 (defn port [server] (-> server :impl :port))
 
 (defn find-server-by-host-and-port

@@ -4,10 +4,15 @@
             [rksm.cloxp-com.messenger :refer [answer send]]
             [cljs.core.async :refer [<! >! put! close! chan pub sub]]
             [rksm.cloxp-com.async-util :refer [join]]
-            [cognitect.transit :as t])
+            [cognitect.transit :as t]
+            [clojure.browser.repl :as brepl])
   (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
 
 (enable-console-print!)
+
+(do
+  (println "running bootstrap...")
+  (brepl/bootstrap))
 
 (defonce cloxp-connection (atom nil))
 
