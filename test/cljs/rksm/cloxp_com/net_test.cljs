@@ -22,7 +22,7 @@
         test-env (run-tests 'rksm.cloxp-com.net-test)]
     (go-loop []
       (if (testing-complete? test-env)
-        (>! done-chan test-env)
+        (do (net/remove-all-connections) (>! done-chan test-env))
         (do (<! (timeout 100)) (recur))))
     done-chan))
 
@@ -92,7 +92,22 @@
              (net/remove-all-connections) ; FIXME why does fixure not work???
              (done))))))))
 
-; #_(deftest ^:async eval-test
+#_(deftest ^:async reconnect-when-server-drops-connection
+  (go
+   (let [{id :id, :as c} (<! (net/connect url))
+         msg-1 {:action "close-connection" :data {:id id}}
+         msg-2 {:action "echo" :data "client send it"}]
+     
+     (let [_ (<! (m/send c {:action "register" :data {:id id}}))
+           {{msg-1-answer :data} :message} (<! (m/send c msg-1))
+           _ (<! (timeout 700))
+           {{msg-2-answer :data} :message} (<! (m/send c msg-2))]
+       (is (= "OK" msg-1-answer))
+       (is (= "client send it" msg-2-answer))
+       (net/remove-all-connections)
+       (done)))))
+
+; (deftest ^:async eval-test
 ;   (let [{id :id, :as c} (<! (net/connect url))]
 ;     (go
 ;      (let [result (<! (join (m/send c {:action "eval" :data {:expr "(+ 1 2)"}})))]

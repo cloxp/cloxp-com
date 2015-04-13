@@ -15,8 +15,6 @@
                       (close! ch)))))
     ch))
 
-(js/console.log "foo bar 2")
-
 (defn eval-js
   [code filename line]
   (println "Evaluating" (-> code (replace #"\n" "") (.slice 0 300)) "...")
