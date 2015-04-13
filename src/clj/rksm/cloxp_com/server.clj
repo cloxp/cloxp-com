@@ -31,19 +31,20 @@
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; server connection, sending / receiving
 
-(declare register-channel find-channel app)
+(declare register-channel find-channel channels app)
 
 (defrecord MessengerImpl [host port stop-fn receive-channel]
   m/IReceiver
   (receive-chan [this] receive-channel)
-  (stop-receiver [this] 
+  (stop-receiver [this]
                  (close! receive-channel)
                  (stop-fn :timeout 100))
   m/ISender
-  (send-message [this msg]
-                (if-let [c (or (some-> this :connection :channel)
-                               (-> msg :target find-channel))]
-                  (http/send! c (json/write-str msg))
+  (send-message [this con msg]
+                (if-let [con (or (:channel con) (-> msg :target find-channel))]
+                  (try
+                    (http/send! con (json/write-str msg))
+                    (catch Exception e (println e)))
                   (throw (Exception. (str "Cannot find channel for target " (:target msg)))))))
 
 (defn create-messenger
@@ -51,13 +52,11 @@
   (let [stop (http/run-server #'app {:port port :host host})
         messenger (m/create-messenger "server-messenger"
                                       (->MessengerImpl host port stop (chan)))]
+    
     (m/add-service messenger "register"
-                   (fn [server msg]
-                     (if-let [c (some-> server :impl :connection :channel)]
-                       (do
-                         (register-channel server (:sender msg) c)
-                         (m/answer server msg :OK false))
-                       (m/answer server msg :error "Registering channel failed"))))
+                   (fn [server con {:keys [sender data] :as msg}]
+                     (register-channel server con sender data)
+                     (m/answer server con msg :OK false)))
     messenger))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -67,7 +66,7 @@
 
 (defn websocket-service-handler [req]
   (http/with-channel req channel
-    (http/on-receive 
+    (http/on-receive
      channel
      (fn [data]
        (let [{host :server-name, port :server-port} req
@@ -137,13 +136,13 @@
 
 (defn find-channel
   [id]
-  (get @channels id))
+  (->> id (get @channels) :channel))
 
 (defn- register-channel
-  [server id channel]
+  [server channel id register-data]
   (http/on-close
    channel (fn [status] (swap! channels dissoc id)))
-  (swap! channels assoc id channel))
+  (swap! channels assoc id {:channel channel :data register-data}))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 

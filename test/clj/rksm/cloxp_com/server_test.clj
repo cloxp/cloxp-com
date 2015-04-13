@@ -41,8 +41,8 @@
 
 (deftest add-a-service
   (let [received (promise)]
-    (m/add-service *server* "test-service" (fn [con msg]  (deliver received msg)))
-    (m/send *client* {:target (:id *server*) :action "test-service" :data "test"})
+    (m/add-service *server* "test-service" (fn [server con msg]  (deliver received msg)))
+    (m/send *client* nil {:target (:id *server*) :action "test-service" :data "test"})
     (let [{:keys [data id sender target]} (deref received 200 nil)]
       (is (= "test" data))
       (is (not (nil? id)))
@@ -52,7 +52,7 @@
 (deftest echo-service-test
   (let [{{data :data} :message}
         (<!! (m/send
-              *client*
+              *client* nil
               {:target (:id *server*) :action "echo" :data "test"}))]
     (is (= "test" data))))
 
@@ -61,7 +61,7 @@
   (testing "add handler"
     (let [add-answer
           (<!! (m/send
-                *client*
+                *client* nil
                 {:target (:id *server*)
                  :action "add-service"
                  :data {:name "adder"
@@ -71,23 +71,23 @@
   (testing "call handler"
     (let [{{data :data} :message}
           (<!! (m/send
-                *client*
+                *client* nil
                 {:target (:id *server*) :action "adder" :data 3}))]
       (is (= 4 data)))))
 
 (deftest streaming-response-test
   (let [handler '(do
                    (require '[rksm.cloxp-com.messenger :as m])
-                   (fn [con msg]
-                     (m/send con (m/prep-answer-msg con msg 1 true))
-                     (m/send con (m/prep-answer-msg con msg 2 true))
-                     (m/send con (m/prep-answer-msg con msg 3 false))))
+                   (fn [server con msg]
+                     (m/send server con (m/prep-answer-msg con msg 1 true))
+                     (m/send server con (m/prep-answer-msg con msg 2 true))
+                     (m/send server con (m/prep-answer-msg con msg 3 false))))
         _ (<!! (m/send
-                *client*
+                *client* nil
                 {:target (:id *server*)
                  :action "add-service"
                  :data {:name "stream" :handler (str handler)}}))
-        recv (m/send *client* {:target (:id *server*) :action "stream"})
+        recv (m/send *client* nil {:target (:id *server*) :action "stream"})
         data (loop [respones []]
                (if-let [next (-> (<!! recv) :message :data)]
                  (recur (conj respones next))
@@ -96,21 +96,22 @@
 
 (deftest register-a-client
   (let [register-msg {:target (:id *server*) :action "register" :data nil}
-        reg-result (<!! (m/send *client* register-msg))
+        reg-result (<!! (m/send *client* nil register-msg))
         c (server/find-channel (:id *client*))]
     (is (= "OK" (-> reg-result :message :data)))
     (is (not= nil c))))
 
 (deftest msg-server->client
-  (<!! (m/send *client* {:target (:id *server*) :action "register"}))
+  (<!! (m/send *client* nil {:target (:id *server*) :action "register"}))
   (m/add-service *client* "add-something"
-                   (fn [con msg] (m/answer con msg (+ 23 (:data msg)) false)))
+                   (fn [server con msg] (m/answer server con msg (+ 23 (:data msg)) false)))
   (let [{{:keys [data error]} :message}
-        (<!! (m/send *server* {:target (:id *client*) :action "add-something" :data 2}))]
+        (<!! (m/send *server* nil {:target (:id *client*) :action "add-something" :data 2}))]
     (is (nil? (or error (:error data))))
     (is (= 25 data))))
 
 (comment
  (test-ns *ns*)
+ (-> server/servers deref first :impl .stop_receiver)
  (server/stop-all-servers!)
  )

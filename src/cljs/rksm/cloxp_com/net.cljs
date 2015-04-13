@@ -1,6 +1,6 @@
 (ns rksm.cloxp-com.net
   (:require [chord.client :refer [ws-ch]]
-            [cljs.core.async :refer [<! >! put! close! chan sub pub]]
+            [cljs.core.async :refer [<! >! put! close! chan sub pub timeout]]
             [cljs-uuid-utils :as uuid]
             [cognitect.transit :as t]
             [rksm.cloxp-com.messenger :as m]
