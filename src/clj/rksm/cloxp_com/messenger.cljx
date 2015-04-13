@@ -7,6 +7,8 @@
   #+cljs (:require-macros [cljs.core.async.macros :refer [go go-loop]])
   #+clj (:import (java.util UUID)))
 
+; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
 (declare default-services handle-incoming-message)
 
 (def ^:dynamic *current-connection*)
@@ -99,17 +101,21 @@
   (add-service [this name handler-fn]
                (swap! services assoc name handler-fn))
   
-  (lookup-handler [this action] (some-> services deref (get action)))
+  (lookup-handler [this action]
+                  (let [handler (some-> services deref (get action))]
+                    (if #+clj (var? handler) #+cljs false
+                      (deref handler)
+                      handler)))
   
   (stop [this] (stop-receiver impl) (-> responses :chan close!)))
 
 (defn create-messenger
-  [name impl]
+  [name impl & [services]]
   (let [id (uuid)
         response-chan (chan)
         messenger (map->Messenger {:name name
                                    :id id
-                                   :services (atom (default-services))
+                                   :services (atom (or services (default-services)))
                                    :responses {:chan response-chan
                                                :pub (pub response-chan (comp :in-response-to :message))}
                                    :impl impl})]
@@ -167,9 +173,9 @@
 
 (defn default-services
   []
-  {"echo" echo-service-handler
-   "add-service" add-service-handler
-   "info" info-service-handler})
+  {"echo" #'echo-service-handler
+   "add-service" #'add-service-handler
+   "info" #'info-service-handler})
 
 (defn- handle-response-message
   [{:keys [responses] :as messenger} con msg]
