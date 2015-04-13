@@ -7,7 +7,7 @@
             [compojure.core :refer [defroutes GET POST DELETE ANY context]]
             [clojure.data.json :as json]
             [rksm.cloxp-com.messenger :as m]
-            [clojure.core.async :as async :refer [>!! >! <! chan go go-loop sub pub close! put!]]))
+            [clojure.core.async :as async :refer [>!! >! <! chan go go-loop sub pub close! put! timeout]]))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -56,6 +56,13 @@
     (m/add-service messenger "register"
                    (fn [server con {:keys [sender data] :as msg}]
                      (register-channel server con sender data)
+                     (m/answer server con msg :OK false)))
+    
+    (m/add-service messenger "close-connection"
+                   (fn [server con {{id :id} :data :as msg}]
+                     (go
+                      (<! (timeout 200))
+                      (-> con :channel (.serverClose 0)))
                      (m/answer server con msg :OK false)))
     messenger))
 
