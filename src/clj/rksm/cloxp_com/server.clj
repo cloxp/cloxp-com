@@ -13,7 +13,7 @@
 
 (defonce log (agent []))
 
-(def debug true)
+(def debug false)
 
 (defn log-req
   [app]
@@ -31,7 +31,9 @@
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; server connection, sending / receiving
 
-(declare register-channel find-channel channels app)
+(declare register-channel find-channel channels app
+         register-service-handler close-connection-service-handler
+         send-message-impl)
 
 (defrecord MessengerImpl [host port stop-fn receive-channel]
   m/IReceiver
@@ -40,47 +42,29 @@
                  (close! receive-channel)
                  (stop-fn :timeout 100))
   m/ISender
-  (send-message [this con msg]
-                (if-let [chan (or (-> msg :target find-channel)
-                                  (:channel m/*current-connection*)
-                                  con)]
-                  (try
-                    (http/send! chan (json/write-str msg))
-                    (catch Exception e (println e)))
-                  (throw (Exception. (str "Cannot find channel for target " (:target msg)))))))
+  (send-message [this con msg] (send-message-impl this con msg)))
 
 (defn create-messenger
   [& {:keys [port host], :or {port 8081 host "0.0.0.0"} :as opts}]
   (let [stop (http/run-server #'app {:port port :host host})
-        messenger (m/create-messenger "server-messenger"
-                                      (->MessengerImpl host port stop (chan)))]
-    
-    (m/add-service messenger "register"
-                   (fn [server {:keys [sender data] :as msg}]
-                     (if m/*current-connection*
-                       (do
-                         (register-channel
-                          server (:channel m/*current-connection*)
-                          sender data)
-                         (m/answer server msg :OK false))
-                       (m/answer server msg
-                                 {:error (str "Cannot register connection for" sender)}
-                                 false))))
-    
-    (m/add-service messenger "close-connection"
-                   (fn [server {{id :id} :data :as msg}]
-                     (if-let [con (if id
-                                    (find-channel id)
-                                    (:channel m/*current-connection*))]
-                       (do
-                         (go
-                          (<! (timeout 200))
-                          (-> con :channel (.serverClose 0)))
-                         (m/answer server msg :OK false))
-                       (m/answer server msg
-                                 {:error (str "cannot find channel for" id)}
-                                 false))))
+        services (merge (m/default-services)
+                        {"register" #'register-service-handler
+                         "close-connection" #'close-connection-service-handler})
+        messenger (m/create-messenger
+                   "server-messenger"
+                   (->MessengerImpl host port stop (chan))
+                   services)]
     messenger))
+
+(defn send-message-impl
+  [server con msg]
+  (if-let [chan (or (:channel m/*current-connection*)
+                    (-> msg :target find-channel)
+                    con)]
+    (try
+      (http/send! chan (json/write-str msg))
+      (catch Exception e (println e)))
+    (throw (Exception. (str "Cannot find channel for target " (:target msg))))))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; routing
@@ -168,6 +152,32 @@
   (swap! channels assoc id {:channel channel :data register-data}))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; services
+
+(defn register-service-handler
+  [server {:keys [sender data] :as msg}]
+  (if m/*current-connection*
+    (do
+      (register-channel
+       server (:channel m/*current-connection*)
+       sender data)
+      (m/answer server msg :OK false))
+    (m/answer server msg
+              {:error (str "Cannot register connection for" sender)}
+              false)))
+
+(defn close-connection-service-handler
+  [server {{id :id} :data :as msg}]
+  (if-let [con (if id
+                 (find-channel id)
+                 (:channel m/*current-connection*))]
+    (try
+      (m/answer server msg :OK false)
+      (.serverClose con 200)
+      (catch Exception e (m/answer server msg {:error (str e)} false)))
+    (m/answer server msg
+              {:error (str "cannot find channel for" id)}
+              false)))
 
 (comment
  (start-server! :port 8082)
