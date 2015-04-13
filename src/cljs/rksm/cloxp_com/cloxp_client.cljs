@@ -10,7 +10,9 @@
 
 (defonce cloxp-connection (atom nil))
 
-(def default-url "ws://localhost:8082/ws")
+(def port 8084)
+
+(def default-url (str "ws://localhost:" port "/ws"))
 
 (defn with-con
   [do-func & [{:keys [url] :as opts}]]

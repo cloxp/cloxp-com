@@ -118,7 +118,7 @@
                  (close! send-chan)
                  (close! receive-chan))
   m/ISender
-  (send-message [this msg]
+  (send-message [this con msg]
                 (log "sending" (:action msg) (:data msg))
                 (let [msg (merge {:target tracker-id} msg)]
                   (go (>! send-chan msg)))))

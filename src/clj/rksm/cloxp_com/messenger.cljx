@@ -1,13 +1,15 @@
 (ns rksm.cloxp-com.messenger
   (:refer-clojure :exclude [send])
-  (:require #+clj [clojure.core.async :refer [>! <! chan go go-loop sub pub close!]]
-            #+cljs [cljs.core.async :refer [<! >! put! close! chan sub pub]]
+  (:require #+clj [clojure.core.async :refer [>! <! chan go go-loop sub pub close! timeout]]
+            #+cljs [cljs.core.async :refer [<! >! put! close! chan sub pub timeout]]
             #+cljs [cljs-uuid-utils :as uuid]
             #+clj [clojure.data.json :as json])
   #+cljs (:require-macros [cljs.core.async.macros :refer [go go-loop]])
   #+clj (:import (java.util UUID)))
 
 (declare default-services handle-incoming-message)
+
+(def ^:dynamic *current-connection*)
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; helper
@@ -54,11 +56,11 @@
 (defprotocol ISender
   (send-message [this con msg]))
 
-(println "defprotocol IMessenger")
+#+clj (println "defprotocol IMessenger")
 
 (defprotocol IMessenger
-  (send [this con msg])
-  (answer [this con msg data more-answers?])
+  (send [this msg])
+  (answer [this msg data more-answers?])
   (add-service [this name handler-fn])
   (lookup-handler [this action])
   (stop [this]))
@@ -68,7 +70,7 @@
   (toString [this] (str "<" name ":" (.substring id 0 5) "...>"))
 
   IMessenger
-  (send [this con msg]
+  (send [this msg]
         (let [{msg-id :id, :as msg} (prep-send-msg this msg false)
               sub-chan (sub (:pub responses) msg-id (chan))
               ;   sub-chan (receive-msg-sub-chan impl msg-id)
@@ -76,7 +78,7 @@
               close (fn [] (close! sub-chan) (close! client-chan))]
           
           ; real send
-          (send-message impl con msg)
+          (send-message impl *current-connection* msg)
           
           ; wait for responses
           (go-loop []
@@ -89,9 +91,9 @@
                 :default (recur))))
           client-chan))
   
-  (answer [this con msg data more-answers?]
+  (answer [this msg data more-answers?]
           (let [msg (prep-answer-msg this msg data more-answers?)]
-            (send-message impl con msg)
+            (send-message impl *current-connection* msg)
             msg))
   
   (add-service [this name handler-fn]
@@ -133,33 +135,34 @@
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 (defn answer-message-not-understood
-  [receiver con msg]
-  (answer receiver con msg {:error "messageNotUnderstood"} false))
+  [receiver msg]
+  (answer receiver msg {:error "messageNotUnderstood"} false))
 
 (defn- handle-target-not-found
-  [receiver con {:keys [target action] :as msg}]
+  [receiver {:keys [target action] :as msg}]
   (let [err (str "cannot forward message " action " to target " target)]
     (println err)
-    (answer receiver con msg {:error err} false)))
+    (answer receiver msg {:error err} false)))
 
 (defn- info-service-handler
-  [{id :id, :as receiver} con msg]
-  (answer receiver con msg
+  [{id :id, :as receiver} msg]
+  (answer receiver msg
           {:id id,
            :services (-> receiver :services deref keys)}
           false))
 
 (defn- echo-service-handler
-  [receiver con msg]
-  [receiver con msg]
-  (answer receiver con msg (:data msg) false))
+  [receiver msg]
+  (go 
+   (<! (timeout 1000))
+   (answer receiver msg (:data msg) false)))
 
 (defn- add-service-handler
-  [receiver con {{:keys [name handler]} :data, :as msg}]
+  [receiver {{:keys [name handler]} :data, :as msg}]
   #+clj (do 
           (add-service receiver name (eval (read-string handler)))
-          (answer receiver con msg "OK" false))
-  #+cljs (answer receiver con msg
+          (answer receiver msg "OK" false))
+  #+cljs (answer receiver msg
                  "add-service currently not supported for cljs" false))
 
 (defn default-services
@@ -169,7 +172,7 @@
    "info" info-service-handler})
 
 (defn- handle-response-message
-  [{:keys [responses] :as messenger} con msg] 
+  [{:keys [responses] :as messenger} con msg]
   (go (some-> messenger
         :responses :chan
         (>! {:message msg :connection con}))))
@@ -177,15 +180,16 @@
 (defn- handle-incoming-message
   [messenger connection raw-data]
   ; FIXME: validate raw-data!
-  (let [msg (if (string? raw-data) (json->clj raw-data) raw-data)
-        {:keys [target action]} msg
-        handler (lookup-handler messenger action)]
-    (cond
-      (contains? msg :in-response-to) (handle-response-message messenger connection msg)
-      (and target (not= (:id messenger) target)) (handle-target-not-found messenger connection msg)
-      (nil? handler) (answer-message-not-understood messenger connection msg)
-      :default (try (handler messenger connection msg)
-                 (catch #+clj Exception #+cljs js/Error e
-                   (do
-                     (println "Error handling service request " name ":\n" e)
-                     (answer messenger connection msg {:error (str e)} false)))))))
+  (binding [*current-connection* connection]
+    (let [msg (if (string? raw-data) (json->clj raw-data) raw-data)
+         {:keys [target action]} msg
+         handler (lookup-handler messenger action)]
+     (cond
+       (contains? msg :in-response-to) (handle-response-message messenger connection msg)
+       (and target (not= (:id messenger) target)) (handle-target-not-found messenger msg)
+       (nil? handler) (answer-message-not-understood messenger msg)
+       :default (try (handler messenger msg)
+                  (catch #+clj Exception #+cljs js/Error e
+                    (do
+                      (println "Error handling service request " name ":\n" e)
+                      (answer messenger msg {:error (str e)} false))))))))

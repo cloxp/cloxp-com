@@ -41,9 +41,11 @@
                  (stop-fn :timeout 100))
   m/ISender
   (send-message [this con msg]
-                (if-let [con (or (:channel con) (-> msg :target find-channel))]
+                (if-let [chan (or (-> msg :target find-channel)
+                                  (:channel m/*current-connection*)
+                                  con)]
                   (try
-                    (http/send! con (json/write-str msg))
+                    (http/send! chan (json/write-str msg))
                     (catch Exception e (println e)))
                   (throw (Exception. (str "Cannot find channel for target " (:target msg)))))))
 
@@ -54,16 +56,30 @@
                                       (->MessengerImpl host port stop (chan)))]
     
     (m/add-service messenger "register"
-                   (fn [server con {:keys [sender data] :as msg}]
-                     (register-channel server con sender data)
-                     (m/answer server con msg :OK false)))
+                   (fn [server {:keys [sender data] :as msg}]
+                     (if m/*current-connection*
+                       (do
+                         (register-channel
+                          server (:channel m/*current-connection*)
+                          sender data)
+                         (m/answer server msg :OK false))
+                       (m/answer server msg
+                                 {:error (str "Cannot register connection for" sender)}
+                                 false))))
     
     (m/add-service messenger "close-connection"
-                   (fn [server con {{id :id} :data :as msg}]
-                     (go
-                      (<! (timeout 200))
-                      (-> con :channel (.serverClose 0)))
-                     (m/answer server con msg :OK false)))
+                   (fn [server {{id :id} :data :as msg}]
+                     (if-let [con (if id
+                                    (find-channel id)
+                                    (:channel m/*current-connection*))]
+                       (do
+                         (go
+                          (<! (timeout 200))
+                          (-> con :channel (.serverClose 0)))
+                         (m/answer server msg :OK false))
+                       (m/answer server msg
+                                 {:error (str "cannot find channel for" id)}
+                                 false))))
     messenger))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

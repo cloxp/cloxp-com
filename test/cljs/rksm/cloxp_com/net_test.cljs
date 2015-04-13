@@ -9,7 +9,9 @@
   (:require-macros [cljs.core.async.macros :refer [go go-loop]]
                    [cemerick.cljs.test :refer [is deftest testing use-fixtures done run-tests]]))
 
-(def url "ws://localhost:8082/ws")
+(def port 8084)
+
+(def url (str "ws://localhost:" port "/ws"))
 
 (defn net-cleanup [t]
   (t)
@@ -92,7 +94,7 @@
              (net/remove-all-connections) ; FIXME why does fixure not work???
              (done))))))))
 
-#_(deftest ^:async reconnect-when-server-drops-connection
+(deftest ^:async reconnect-when-server-drops-connection
   (go
    (let [{id :id, :as c} (<! (net/connect url))
          msg-1 {:action "close-connection" :data {:id id}}

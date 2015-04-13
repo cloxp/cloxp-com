@@ -7,8 +7,10 @@
 
 (def ^:dynamic *server*)
 
+(def port 8084)
+
 (defn fixture [test]
-  (binding [*server* (server/ensure-server! :port 8082)]
+  (binding [*server* (server/ensure-server! :port 8084)]
     (test)
     (server/stop-server! *server*)))
 

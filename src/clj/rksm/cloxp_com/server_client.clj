@@ -11,7 +11,7 @@
   (receive-chan [this] ws-chan)
   (stop-receiver [this] (close! ws-chan) (.close sock))
   m/ISender
-  (send-message [this con msg] (ws/send-msg sock (json/write-str msg))))
+  (send-message [this _ msg] (ws/send-msg sock (json/write-str msg))))
 
 
 (defn create-messenger
