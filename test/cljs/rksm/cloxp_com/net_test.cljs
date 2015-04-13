@@ -74,8 +74,9 @@
                 (async/go
                  (async/<! (async/timeout wait))
                  (println "answer from browser:"
-                          (async/<! (let [msg (m/prep-send-msg con msg-to-send false)]
-                                      (m/send con msg))))))))
+                          (async/<!
+                           (m/send
+                            con (m/prep-send-msg con msg-to-send false))))))))
          {id :id, :as c} (<! (net/connect url))
          add-service-msg {:action "add-service"
                           :data {:name "send-new-message"
@@ -101,8 +102,8 @@
          msg-2 {:action "echo" :data "client send it"}]
      
      (let [_ (<! (m/send c {:action "register" :data {:id id}}))
-           {{msg-1-answer :data} :message} (<! (m/send c msg-1))
-           _ (<! (timeout 700))
+           {{msg-1-answer :data} :message :as msg} (<! (m/send c msg-1))
+        ;   _ (<! (timeout 200))
            {{msg-2-answer :data} :message} (<! (m/send c msg-2))]
        (is (= "OK" msg-1-answer))
        (is (= "client send it" msg-2-answer))

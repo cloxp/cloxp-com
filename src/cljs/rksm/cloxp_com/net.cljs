@@ -32,114 +32,117 @@
 (declare send-handshake)
 
 (defn- reconnect
-  [url receive-chan send-chan timeout-per-attempt attempt-no max-attempts]
-  (if (> attempt-no max-attempts)
-    (log "Giving up reconnecting to" url)
-    (go
-     (log "Attempt" attempt-no "trying to reconnect to..." url)
-     (let [{:keys [ws-channel error]} (<! (ws-ch url {:format :json-kw}))]
-       (if error
-         (do
-           (log "Re-connect to" url "failed, trying again...")
-           (log "waiting...")
-           (<! (timeout timeout-per-attempt))
-           (log "...waiting done")
-           (reconnect url receive-chan send-chan
-                      timeout-per-attempt (inc attempt-no) max-attempts))
-         (send-handshake url ws-channel
-                         receive-chan send-chan (chan)))))))
+  [url impl-state timeout-per-attempt attempt-no max-attempts]
+  (let [{:keys [closed?]} @impl-state]
+    (if (or (> attempt-no max-attempts) closed?)
+      (log "Giving up reconnecting to" url)
+      (go
+       (log "Attempt" attempt-no "trying to reconnect to..." url)
+       (let [{:keys [ws-channel error]} (<! (ws-ch url {:format :json-kw}))]
+         (if (or error (nil? ws-channel))
+           (do
+             (log "Re-connect to" url "failed, trying again...")
+             (<! (timeout timeout-per-attempt))
+             (reconnect url impl-state timeout-per-attempt (inc attempt-no) max-attempts))
+           (do
+             (swap! impl-state assoc :ws-chan ws-channel)
+             (send-handshake url impl-state (chan)))))))))
+
+(defn- start-receive-loop
+  [url impl-state]
+  (go-loop []
+    (let [{:keys [closed? ws-chan receive-chan]} @impl-state]
+      (if closed?
+        (do
+          (log "Client ended connection to" url)
+          (some-> ws-chan close!))
+        (let [data (and ws-chan (<! ws-chan))]
+          (cond
+            (nil? data) (do
+                          (log "Server closed connection" url)
+                          (swap! impl-state dissoc :ws-chan)
+                          (reconnect url impl-state 1000 0 10))
+            :default (do
+                       (>! receive-chan {:raw-msg (or (:message data) data),
+                                         :connection {:channel ws-chan}})
+                       (recur))))))))
 
 (defn- send-handshake
   "ws-chan: coming from chord, for sending and receiving
   receive-chan: handed to the messenger, for receiving messages, decoupled from
   chord to allow for transparent reconnects
-  send-chan: handed to the messenger, decoupled from chord
   result-channel: for when connection is established"
-  [url ws-channel receive-chan send-chan result-chan]
-  (go
+  [url impl-state result-chan]
+  (let [{:keys [ws-chan]} @impl-state]
+   (go
 
-   ; let the server know who we are
-   (>! ws-channel {:action "info" :sender nil})
-   (let [{:keys [message error]} (<! ws-channel)
-         {{server-id :id} :data} message]
+    ; let the server know who we are
+    (>! ws-chan {:action "info" :sender nil})
+    (let [{:keys [message error]} (<! ws-chan)
+          {{server-id :id} :data} message]
+      (log "Created connection to server" url (str "(" server-id ")"))
+      (swap! impl-state assoc :server-id server-id)
+      (start-receive-loop url impl-state)
 
-     (log "sending info to server" message error)
-
-     ; receive loop
-     (go-loop []
-       (if-let [data (<! ws-channel)]
-         (do
-           (>! receive-chan {:raw-msg (or (:message data) data),
-                             :connection {:channel ws-channel}})
-           (recur))
-         (do
-           (log "Server connection closed" url (str "(" server-id ")"))
-           (reconnect url receive-chan send-chan 1000
-                      0 10))))
-
-     ; send loop
-     (go-loop []
-       (if-let [data (<! send-chan)]
-         (do
-           (>! ws-channel data)
-           (recur))
-         (do
-           (log "Client closed connection to server" url (str "(" server-id ")"))
-        ;   (close! ws-channel)
-           (close! receive-chan)
-           (close! send-chan))))
-
-     (log "Created connection to server" url (str "(" server-id ")"))
-
-     ; for the messenger
-     (>! result-chan {:tracker-id server-id
-                      :send-chan send-chan
-                      :receive-chan receive-chan
-                      :ws-chan ws-channel})
-     (close! result-chan))))
+      ; for the messenger
+      (>! result-chan impl-state)))))
 
 (defn- establish-server-channels
   [url]
-  (let [result-chan (chan)
-        receive-chan (chan)
-        send-chan (chan)]
+  (let [result-chan (chan)]
     (go
      (log "Trying to connect to cloxp server" url)
-     (let [{:keys [ws-channel error] :as connect-chan} (<! (ws-ch url {:format :json-kw}))]
+     (let [{:keys [ws-channel error] :as connect-chan} (<! (ws-ch url {:format :json-kw}))
+           impl-state (atom {:receive-chan (chan)
+                             :ws-chan ws-channel
+                             :closed? false
+                             :server-id nil})]
        (if error
          (handle-establish-server-connection-error url error result-chan)
-         (send-handshake url ws-channel receive-chan send-chan result-chan))))
+         (send-handshake url impl-state result-chan))))
     result-chan))
 
-(defrecord MessengerImpl [url tracker-id send-chan receive-chan]
+(defrecord MessengerImpl [url state]
   m/IReceiver
-  (receive-chan [this] receive-chan)
+  (receive-chan [this] (@state :receive-chan))
   (stop-receiver [this]
-                 (close! send-chan)
-                 (close! receive-chan))
+                 (swap! state assoc :closed? true)
+                 (let [{:keys [ws-chan receive-chan]} @state]
+                   (some-> ws-chan close!)
+                   (close! receive-chan)))
   m/ISender
   (send-message [this con msg]
-                (log "sending" (:action msg) (:data msg))
-                (let [msg (merge {:target tracker-id} msg)]
-                  (go (>! send-chan msg)))))
+                (go-loop []
+                  (let [{:keys [closed? ws-chan server-id]} @state]
+                    (when closed?
+                     (throw
+                       (js/Error.
+                        (str "Messenger to " url" is closed"
+                             " (when trying to send " msg ")"))))
+                   (if ws-chan
+                     (>! ws-chan (merge {:target server-id} msg))
+                     (do
+                       (<! (timeout 500))
+                       (recur)))))))
 
 (defn create-messenger
   [url]
   (let [result-chan (chan)]
     (go
-     (let [{:keys [tracker-id send-chan receive-chan error] :as connected}
+     (let [{:keys [server-id ws-chan receive-chan error] :as state}
            (<! (establish-server-channels url))]
-       (if (or error (not connected))
+       (if (or error (not state))
          (let [msg (str "Cannot connect to " url ": "
                         (or error "establish server channel failed"))]
            (.error js/console msg)
            (>! result-chan {:error msg}))
          (let [messenger (m/create-messenger
                           "browser-client"
-                          (->MessengerImpl url tracker-id
-                            send-chan receive-chan))]
-           (m/add-service messenger "eval-js" eval/eval-js-service)
-           (m/add-service messenger "load-js" eval/load-js-service)
+                          (->MessengerImpl url state)
+                          (merge
+                           (m/default-services)
+                           {"eval-js" eval/eval-js-service
+                            "load-js" eval/load-js-service}))]
            (>! result-chan messenger)))))
     result-chan))
 
