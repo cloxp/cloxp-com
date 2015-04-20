@@ -53,7 +53,7 @@
                              (m/send con (m/prep-answer-msg con msg 3 false))))
          add-service-msg {:action "add-service"
                           :data {:name "stream" :handler (str stream-handler)}}]
-     
+
      (testing "add-service"
        (let [add-service-answer (<! (m/send c add-service-msg))]
          (is (= "OK" (-> add-service-answer :message :data))))
@@ -83,11 +83,11 @@
                                  :handler (str send-new-message-handler)}}
          msg-to-send {:target (:id c) :action "echo" :data "from-server"}
          send-new-message-msg {:action "send-new-message" :data {:wait 300 :msg-to-send msg-to-send}}]
-     
+
      (testing "add-server"
        (let [{{add-status :data} :message} (<! (m/send c add-service-msg))]
          (is (= "OK" add-status))
-         
+
          (testing "invoke server"
            (let [{{send-status :data} :message} (<! (m/send c send-new-message-msg))]
              (is (= "OK" send-status))
@@ -103,14 +103,14 @@
      
      (let [_ (<! (m/send c {:action "register" :data {:id id}}))
            {{msg-1-answer :data} :message :as msg} (<! (m/send c msg-1))
-        ;   _ (<! (timeout 200))
+           _ (<! (timeout 200))
            {{msg-2-answer :data} :message} (<! (m/send c msg-2))]
        (is (= "OK" msg-1-answer))
        (is (= "client send it" msg-2-answer))
        (net/remove-all-connections)
        (done)))))
 
-; (deftest ^:async eval-test
+; #_(deftest ^:async eval-test
 ;   (let [{id :id, :as c} (<! (net/connect url))]
 ;     (go
 ;      (let [result (<! (join (m/send c {:action "eval" :data {:expr "(+ 1 2)"}})))]

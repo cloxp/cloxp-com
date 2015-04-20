@@ -17,7 +17,8 @@
 
 (defrecord CloxpCljsReplEnv [server client-id]
   repl/IJavaScriptEnv
-  (-setup [this opts])
+  (-setup [this opts]
+          #_(eval-cljs (println "connected!") this))
   (-evaluate [this filename line js]
              (send-to-js server client-id
                          "eval-js" {:code js :filename filename :line line}))
@@ -30,21 +31,33 @@
 
 (defn default-repl-env
   []
-  (if-let [s (server/find-server-by-host-and-port :port 8082 :host "0.0.0.0")]
-    (if-let [client-id (-> server/channels deref keys first)]
-      (->CloxpCljsReplEnv s client-id)
-      (throw (Exception. "No cljs-repl client found")))
-    (throw (Exception. "No server for cljs-repl found"))))
+  (if-let [{:keys [server id] :as connection} (first (server/all-connections))]
+    (->CloxpCljsReplEnv server id)
+    (throw (Exception. "No cljs-repl connection found"))))
+
+(defn repl-env-for-client
+  [client-id]
+  (if-let [{:keys [server] :as con} (first
+                                     (filter
+                                      #(= (:id %) client-id)
+                                      (server/all-connections)))]
+    (->CloxpCljsReplEnv server client-id)
+    (throw (Exception. ("No cljs-repl connection for " client-id "found")))))
+
 
 (defn eval-cljs
-  ([form opts]
-   (eval-cljs form (default-repl-env) (or opts {})))
-  ([form cloxp-repl-env opts]
+  ([form {:keys [target-id] :as opts}]
+   (let [env (if target-id
+               (repl-env-for-client target-id)
+               (default-repl-env))]
+     (eval-cljs form env (or opts {}))))
+  ([form cloxp-repl-env {:keys [ns-sym] :as opts}]
    (let [c-env (or env/*compiler* (env/default-compiler-env))
          ana-env (merge (ana/empty-env) {:ns 'cljs.user})]
      (env/with-compiler-env c-env
        (repl/evaluate-form cloxp-repl-env
-                           ana-env
+                           (assoc ana-env :ns (ana/get-namespace
+                                               (or ns-sym ana/*cljs-ns*)))
                            "<cloxp-cljs-repl>"
                            form
                            identity ; wrap-fn

@@ -8,11 +8,14 @@
 
 (enable-console-print!)
 
+(def ^:private loc (or (some-> js/document .-location)))
+(def port (if loc (.-port loc) "8084"))
+(def host (if loc (.-hostname loc) "localhost"))
+(def default-url (str "ws://" host ":" port "/ws"))
+
+; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
 (defonce cloxp-connection (atom nil))
-
-(def port 8084)
-
-(def default-url (str "ws://localhost:" port "/ws"))
 
 (defn with-con
   [do-func & [{:keys [url] :as opts}]]
