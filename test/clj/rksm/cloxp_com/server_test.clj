@@ -99,7 +99,7 @@
 (deftest register-a-client
   (let [register-msg {:target (:id *server*) :action "register" :data nil}
         reg-result (<!! (m/send *client* register-msg))
-        c (server/find-channel (:id *client*))]
+        c (server/find-channel *server* (:id *client*))]
     (is (= "OK" (-> reg-result :message :data)))
     (is (not= nil c))))
 
@@ -114,6 +114,7 @@
 
 (comment
  (test-ns *ns*)
+ 123
  (-> server/servers deref first :impl .stop_receiver)
  (server/stop-all-servers!)
  )

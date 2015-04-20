@@ -7,7 +7,8 @@
             [compojure.core :refer [defroutes GET POST DELETE ANY context]]
             [clojure.data.json :as json]
             [rksm.cloxp-com.messenger :as m]
-            [clojure.core.async :as async :refer [>!! >! <! chan go go-loop sub pub close! put! timeout]]))
+            [clojure.core.async :as async :refer [>!! >! <! chan go go-loop sub pub close! put! timeout]]
+            [medley.core :refer [dissoc-in]]))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -57,10 +58,12 @@
     messenger))
 
 (defn send-message-impl
-  [server con msg]
+  [{:keys [host port] :as server-impl} con msg]
   (if-let [chan (or (:channel m/*current-connection*)
-                    (-> msg :target find-channel)
-                    con)]
+                    (find-channel
+                     (find-server-by-host-and-port :host host :port port)
+                     (:target msg))
+                    (some->> con :channel))]
     (try
       (http/send! chan (json/write-str msg))
       (catch Exception e (println e)))
@@ -141,15 +144,29 @@
 
 (defonce channels (atom {}))
 
+(defn find-connection
+  [{server-id :id, :as server} id]
+  (get-in @channels [server-id id]))
+
+(defn server-connections
+  [{server-id :id, :as server}]
+  (some-> @channels (get server-id) vals))
+
+(defn all-connections
+  []
+  (mapcat (fn [s] (map #(assoc % :server s)
+                       (server-connections s)))
+          @servers))
+
 (defn find-channel
-  [id]
-  (->> id (get @channels) :channel))
+  [server id]
+  (:channel (find-connection server id)))
 
 (defn- register-channel
-  [server channel id register-data]
+  [{server-id :id, :as server} channel id register-data]
   (http/on-close
-   channel (fn [status] (swap! channels dissoc id)))
-  (swap! channels assoc id {:channel channel :data register-data}))
+   channel (fn [status] (swap! channels dissoc-in [server-id id])))
+  (swap! channels assoc-in [server-id id] (merge register-data {:channel channel})))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; services
@@ -169,7 +186,7 @@
 (defn close-connection-service-handler
   [server {{id :id} :data :as msg}]
   (if-let [con (if id
-                 (find-channel id)
+                 (find-channel server id)
                  (:channel m/*current-connection*))]
     (try
       (m/answer server msg :OK false)
@@ -180,6 +197,6 @@
               false)))
 
 (comment
- (start-server! :port 8082)
+ (start-server! :port 8084)
  (stop-all-servers!)
  )
