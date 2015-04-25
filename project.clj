@@ -1,4 +1,4 @@
-(defproject org.rksm/cloxp-com "0.1.2"
+(defproject org.rksm/cloxp-com "0.1.3"
   :description "intra- and inter-system messaging for cloxp"
   :license {:name "MIT License"
             :url "http://opensource.org/licenses/MIT"}
