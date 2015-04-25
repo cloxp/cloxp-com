@@ -34,7 +34,8 @@
 
 (declare register-channel find-channel channels app
          register-service-handler close-connection-service-handler
-         send-message-impl)
+         send-message-impl
+         find-server-by-host-and-port)
 
 (defrecord MessengerImpl [host port stop-fn receive-channel]
   m/IReceiver
@@ -145,18 +146,26 @@
 (defonce channels (atom {}))
 
 (defn find-connection
-  [{server-id :id, :as server} id]
-  (get-in @channels [server-id id]))
+  ([id]
+   (->> @servers
+     (keep #(find-connection % id))
+     first))
+  ([{server-id :id, :as server} id]
+   (some->  @channels
+     (get-in [server-id id])
+     (assoc :server server))))
 
 (defn server-connections
   [{server-id :id, :as server}]
-  (some-> @channels (get server-id) vals))
+  (or
+   (some->> (get @channels server-id)
+     vals
+     (map #(assoc % :server server)))
+   ()))
 
 (defn all-connections
   []
-  (mapcat (fn [s] (map #(assoc % :server s)
-                       (server-connections s)))
-          @servers))
+  (mapcat server-connections @servers))
 
 (defn find-channel
   [server id]

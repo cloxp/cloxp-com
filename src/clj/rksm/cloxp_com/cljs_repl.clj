@@ -37,13 +37,9 @@
 
 (defn repl-env-for-client
   [client-id]
-  (if-let [{:keys [server] :as con} (first
-                                     (filter
-                                      #(= (:id %) client-id)
-                                      (server/all-connections)))]
+  (if-let [{:keys [server] :as con} (server/find-connection client-id)]
     (->CloxpCljsReplEnv server client-id)
-    (throw (Exception. ("No cljs-repl connection for " client-id "found")))))
-
+    (throw (Exception. (str "No cljs-repl connection for client " client-id " found")))))
 
 (defn eval-cljs
   ([form {:keys [target-id] :as opts}]

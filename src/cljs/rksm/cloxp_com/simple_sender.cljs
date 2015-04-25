@@ -1,7 +1,7 @@
 (ns rksm.cloxp-com.simple-sender
-  (:refer-clojure :exclude [send])
-  (:require [rksm.cloxp-com.cloxp-client :as cloxp]
-            [cljs.core.async :refer [<! >! put! close! chan pub sub]])
-  (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
+  (:require [rksm.cloxp-com.cloxp-client :as cloxp]))
 
 (cloxp/start)
+
+(js/setTimeout
+ #(set! (.. js/document -body -style -backgroundColor) "white"))

@@ -1,4 +1,4 @@
-(defproject org.rksm/cloxp-com "1.0.0-SNAPSHOT"
+(defproject org.rksm/cloxp-com "0.1.2"
   :description "intra- and inter-system messaging for cloxp"
   :license {:name "MIT License"
             :url "http://opensource.org/licenses/MIT"}
@@ -18,7 +18,7 @@
   :test-paths ["test/clj" "test/cljs"]
   :profiles {:dev {:dependencies [[com.cemerick/clojurescript.test "0.3.3"]
                                   [rksm/subprocess "0.1.2"]
-                                  [org.rksm/cloxp-projects "0.1.2-SNAPSHOT"]]
+                                  [org.rksm/cloxp-projects "0.1.2"]]
                    :plugins [[lein-cljsbuild "1.0.4"]
                              [com.keminglabs/cljx "0.6.0"]]
                    :aliases {"cleanbuild" ["do" "clean," "cljx" "once," "cljsbuild" "once"]
