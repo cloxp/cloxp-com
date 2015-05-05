@@ -114,7 +114,7 @@
 
 (comment
  (test-ns *ns*)
- 123
+
  (-> server/servers deref first :impl .stop_receiver)
  (server/stop-all-servers!)
  )

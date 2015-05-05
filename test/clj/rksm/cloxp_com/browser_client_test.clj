@@ -1,47 +1,29 @@
 (ns rksm.cloxp-com.browser-client-test
-  (:require [clojure.core.async :as async :refer [go go-loop <!! >!! thread]]
-            [rksm.cloxp-projects.lein :as lein]
-            [rksm.subprocess :as subp]
-            [rksm.cloxp-com.server :as server]
+  (:require [rksm.cloxp-com.server :as server]
+            [cljs-slimerjs-tester.core :as tester]
             [clojure.test :refer :all]))
 
-(def ^:dynamic *server*)
-
-(def port 8084)
+(defn abs-path [rel-path]
+  (->>
+    rel-path
+    (clojure.java.io/file ".")
+    .getCanonicalPath))
 
 (defn fixture [test]
-  (binding [*server* (server/ensure-server! :port 8084)]
+  (let [server (server/ensure-server! :port 8084)]
     (test)
-    (server/stop-server! *server*)))
+    (server/stop-server! server)))
 
 (use-fixtures :each fixture)
 
-(defn project-clj
-  []
-  (-> (clojure.java.io/file ".")
-    lein/lein-project-conf-content
-    (assoc :eval-in :leiningen)))
-
-(defn run-cljs-tests
-  []
-  (some-> (project-clj)
-    :cljsbuild :test-commands (get "unit-tests")
-    (->> (apply subp/async-proc))))
-
 (deftest all-cljs-tests
-  (let [proc (run-cljs-tests)
-        _ (subp/wait-for proc)
-        code (subp/exit-code proc)
-        out (subp/stdout proc)
-        [_ test pass fail error]
-        (re-find #":test ([0-9]+), :pass ([0-9]+), :fail ([0-9]+), :error ([0-9]+)" out)
-        [test pass fail error] (->> [test pass fail error]
-                                 (map #(or % "nil"))
-                                 (map read-string))]
-    (println [test pass fail error])
-    (is (= 0 code))
-    (is (= 0 fail))
-    (is (= 0 error))))
+  (let [{:keys [test pass fail error]}
+        (tester/run-tests (abs-path "cloxp-cljs-build/")
+                          ["/cloxp-cljs.js"]
+                          'rksm.cloxp-com.test-runner/runner
+                          {:port 8095 :timeout 10000})]
+    (is (zero? fail))
+    (is (zero? error))))
 
 (comment
  (test-ns *ns*)
