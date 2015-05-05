@@ -4,10 +4,9 @@
             [rksm.cloxp-com.messenger :as m]
             [cljs.core.async :refer [<! >! put! close! chan pub sub timeout]]
             [rksm.cloxp-com.async-util :refer [join]]
-            [cognitect.transit :as t]
-            [cemerick.cljs.test :refer [testing-complete?]])
+            [cognitect.transit :as t])
   (:require-macros [cljs.core.async.macros :refer [go go-loop]]
-                   [cemerick.cljs.test :refer [is deftest testing use-fixtures done run-tests]]))
+                   [cemerick.cljs.test :refer [is deftest testing use-fixtures done]]))
 
 (def port 8084)
 
@@ -19,19 +18,11 @@
 
 (use-fixtures :each net-cleanup)
 
-(defn start-tests []
-  (let [done-chan (chan)
-        test-env (run-tests 'rksm.cloxp-com.net-test)]
-    (go-loop []
-      (if (testing-complete? test-env)
-        (do (net/remove-all-connections) (>! done-chan test-env))
-        (do (<! (timeout 100)) (recur))))
-    done-chan))
-
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 (deftest ^:async simple-ws-connect-test
   (go
+   (println "connecting" url)
    (let [{id :id, :as c} (<! (net/connect url))]
      (is (string? id))
      (go
@@ -109,24 +100,3 @@
        (is (= "client send it" msg-2-answer))
        (net/remove-all-connections)
        (done)))))
-
-; #_(deftest ^:async eval-test
-;   (let [{id :id, :as c} (<! (net/connect url))]
-;     (go
-;      (let [result (<! (join (m/send c {:action "eval" :data {:expr "(+ 1 2)"}})))]
-;       (is (= [1 2 3] (map (comp :data :message) result)))
-;       (done)))))
-
-; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
-(enable-console-print!)
-
-(go
- (let [result (<! (start-tests))
-       result (apply merge
-                ((juxt #(select-keys % [:test :pass :fail :error])
-                       (comp deref :async))
-                 result))]
-   (println result)
-   (<! (timeout 100))
-   (set! (.-cljs_tests_done js/window) (clj->js result))))

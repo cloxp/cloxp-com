@@ -3,8 +3,7 @@
             [cljs.core.async :refer [<! >! put! close! chan sub pub timeout]]
             [cljs-uuid-utils :as uuid]
             [cognitect.transit :as t]
-            [rksm.cloxp-com.messenger :as m]
-            [rksm.cloxp-com.eval :as eval])
+            [rksm.cloxp-com.messenger :as m])
   (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
 
 (def debug true)
@@ -139,10 +138,12 @@
          (let [messenger (m/create-messenger
                           "browser-client"
                           (->MessengerImpl url state)
-                          (merge
-                           (m/default-services)
-                           {"eval-js" eval/eval-js-service
-                            "load-js" eval/load-js-service}))]
+                          (m/default-services)
+                        ;   (merge
+                        ;   (m/default-services)
+                        ;   {"eval-js" eval/eval-js-service
+                        ;     "load-js" eval/load-js-service})
+                          )]
            (>! result-chan messenger)))))
     result-chan))
 
