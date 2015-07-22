@@ -1,4 +1,4 @@
-(defproject org.rksm/cloxp-com "0.1.8"
+(defproject org.rksm/cloxp-com "0.1.9-SNAPSHOT"
   :description "intra- and inter-system messaging for cloxp"
   :license {:name "MIT License"
             :url "http://opensource.org/licenses/MIT"}
@@ -14,7 +14,7 @@
                  [org.clojars.franks42/cljs-uuid-utils "0.1.3"]
                  [com.cognitect/transit-cljs "0.8.220"]
                  [medley/medley "0.7.0"]
-                 [org.rksm/system-files "0.1.6"]]
+                 [org.rksm/system-files "0.1.7-SNAPSHOT"]]
   :source-paths ["src/clj" "src/cljs"]
   :test-paths ["test/clj" "test/cljs"]
   :clean-targets [:target-path "cloxp-cljs-build"]
