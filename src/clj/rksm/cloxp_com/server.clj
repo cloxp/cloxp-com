@@ -8,7 +8,8 @@
             [clojure.data.json :as json]
             [rksm.cloxp-com.messenger :as m]
             [clojure.core.async :as async :refer [>!! >! <! chan go go-loop sub pub close! put! timeout]]
-            [medley.core :refer [dissoc-in]]))
+            [medley.core :refer [dissoc-in]]
+            [rksm.system-files :as sf]))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -88,7 +89,7 @@
 
 (defn cljs-file-handler
   [req]
-  (if-let [content (some-> req :params :* ring.util.codec/url-decode rksm.system-files/file)]
+  (if-let [content (some-> req :params :* ring.util.codec/url-decode sf/file)]
     content
     (-> (response/render "<span>not here</span>" req)
       (assoc :status 404))))

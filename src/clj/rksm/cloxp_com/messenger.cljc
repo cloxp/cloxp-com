@@ -1,11 +1,11 @@
 (ns rksm.cloxp-com.messenger
   (:refer-clojure :exclude [send])
-  (:require #+clj [clojure.core.async :refer [>! <! chan go go-loop sub pub close! timeout]]
-            #+cljs [cljs.core.async :refer [<! >! put! close! chan sub pub timeout]]
-            #+cljs [cljs-uuid-utils :as uuid]
-            #+clj [clojure.data.json :as json])
-  #+cljs (:require-macros [cljs.core.async.macros :refer [go go-loop]])
-  #+clj (:import (java.util UUID)))
+  (:require #?(:clj [clojure.core.async :refer [>! <! chan go go-loop sub pub close! timeout]])
+            #?(:cljs [cljs.core.async :refer [<! >! put! close! chan sub pub timeout]])
+            #?(:cljs [cljs-uuid-utils :as uuid])
+            #?(:clj [clojure.data.json :as json]))
+  #?(:cljs (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
+  #?(:clj (:import (java.util UUID))))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -18,18 +18,18 @@
 
 (defn- uuid
   []
-  #+clj (str (UUID/randomUUID))
-  #+cljs (uuid/uuid-string (uuid/make-random-uuid)))
+  #?(:clj (str (UUID/randomUUID))
+     :cljs (uuid/uuid-string (uuid/make-random-uuid))))
 
 (defn- json->clj
   [string]
-  #+cljs (js->clj (.parse js/JSON string))
-  #+clj (json/read-str string :key-fn keyword))
+  #?(:cljs (js->clj (.parse js/JSON string))
+     :clj (json/read-str string :key-fn keyword)))
 
 (defn- clj->json
   [obj]
-  #+cljs (.stringify js/JSON (clj->js obj))
-  #+clj (json/write-str obj))
+  #?(:cljs (.stringify js/JSON (clj->js obj))
+     :clj (json/write-str obj)))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; messages
@@ -58,7 +58,7 @@
 (defprotocol ISender
   (send-message [this con msg]))
 
-#+clj (println "defprotocol IMessenger")
+#?(:clj (println "defprotocol IMessenger"))
 
 (defprotocol IMessenger
   (send [this msg])
@@ -103,7 +103,7 @@
   
   (lookup-handler [this action]
                   (let [handler (some-> services deref (get action))]
-                    (if #+clj (var? handler) #+cljs false
+                    (if #?(:clj (var? handler) :cljs false)
                       (deref handler)
                       handler)))
   
@@ -165,11 +165,11 @@
 
 (defn- add-service-handler
   [receiver {{:keys [name handler]} :data, :as msg}]
-  #+clj (do 
+  #?(:clj (do 
           (add-service receiver name (eval (read-string handler)))
-          (answer receiver msg "OK" false))
-  #+cljs (answer receiver msg
-                 "add-service currently not supported for cljs" false))
+                      (answer receiver msg "OK" false))
+     :cljs (answer receiver msg
+                 "add-service currently not supported for cljs" false)))
 
 (defn default-services
   []
@@ -195,7 +195,7 @@
        (and target (not= (:id messenger) target)) (handle-target-not-found messenger msg)
        (nil? handler) (answer-message-not-understood messenger msg)
        :default (try (handler messenger msg)
-                  (catch #+clj Exception #+cljs js/Error e
+                  (catch #?(:clj Exception :cljs js/Error) e
                     (do
                       (println "Error handling service request " name ":\n" e)
                       (answer messenger msg {:error (str e)} false))))))))

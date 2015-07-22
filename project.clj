@@ -12,27 +12,20 @@
                  [jarohen/chord "0.6.0" :exclusions [com.cemerick/clojurescript.test]]
                  [org.clojure/data.json "0.2.6"]
                  [org.clojars.franks42/cljs-uuid-utils "0.1.3"]
-  :source-paths ["src/clj" "src/cljs" "target/classes"]
                  [com.cognitect/transit-cljs "0.8.220"]
                  [medley/medley "0.7.0"]
                  [org.rksm/system-files "0.1.6"]]
+  :source-paths ["src/clj" "src/cljs"]
   :test-paths ["test/clj" "test/cljs"]
+  :clean-targets [:target-path "cloxp-cljs-build"]
   :profiles {:dev {:dependencies [[com.cemerick/clojurescript.test "0.3.3"]
                                   [org.rksm/cljs-slimerjs-tester "0.1.0"]]
-                   :plugins [[lein-cljsbuild "1.0.4"]
-                             [com.keminglabs/cljx "0.6.0"]]
-                   :aliases {"cleanbuild" ["do" "clean," "cljx" "once," "cljsbuild" "once"]
+                   :plugins [[lein-cljsbuild "1.0.4"]]
+                   :aliases {"cleanbuild" ["do" "clean," "cljsbuild" "once"]
                              "cleantest" ["do" "cleanbuild," "test"]
                              "cleaninstall" ["do" "cleanbuild," "install"]
                              "cleandeploy" ["do" "cleanbuild," "deploy" "clojars"]}}}
-  :auto-clean false ; for cljx
-  :cljx {:builds [{:source-paths ["src/clj" "test/clj" "src/cljs" "test/cljs"]
-                   :output-path "target/classes"
-                   :rules :clj}
-                  {:source-paths ["src/clj" "test/clj" "src/cljs" "test/cljs"]
-                   :output-path "target/classes"
-                   :rules :cljs}]}
-  :cljsbuild {:builds {:default {:source-paths ["src/cljs/" "test/cljs/" "target/classes/"]
+  :cljsbuild {:builds {:default {:source-paths ["src/cljs/" "test/cljs/"]
                                  :compiler {:output-to "cloxp-cljs-build/cloxp-cljs.js",
                                             :output-dir "cloxp-cljs-build/out",
                                             :optimizations :none,

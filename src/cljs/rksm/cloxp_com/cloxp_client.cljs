@@ -8,10 +8,14 @@
 
 (enable-console-print!)
 
+(defn- url-for-cloxp-client
+  [host port]
+  (str "ws://" host ":" port "/ws"))
+
 (def ^:private loc (or (some-> js/document .-location)))
 (def port (if loc (.-port loc) "8084"))
 (def host (if loc (.-hostname loc) "localhost"))
-(def default-url (str "ws://" host ":" port "/ws"))
+(def default-url (url-for-cloxp-client host port))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -28,7 +32,11 @@
        (do-func c)))))
 
 (defn start
-  []
+  [& {:keys [host port] :or {"0.0.0.0" :host} :as opts}]
+  (println "test in client")
+  (println {:url (if port 
+                   (url-for-cloxp-client host port)
+                   default-url)})
   (do
     (println "running bootstrap...")
     (brepl/bootstrap))
@@ -39,7 +47,10 @@
                         :cloxp-client? true
                         :services (-> con :services deref keys)
                         :document-url (. js/document -URL)}})
-      (println "Connected"))))
+      (println "Connected"))
+    {:url (if port 
+            (url-for-cloxp-client host port)
+            default-url)}))
 
 (defn test-send
   [con]
