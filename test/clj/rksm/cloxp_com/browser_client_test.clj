@@ -19,7 +19,7 @@
 (deftest all-cljs-tests
   (let [{:keys [test pass fail error]}
         (tester/run-tests (abs-path "cloxp-cljs-build/")
-                          ["/cloxp-cljs.js"]
+                          ["/out/goog/base.js" "/cloxp-cljs.js"]
                           'rksm.cloxp-com.test-runner/runner
                           {:port 8095 :timeout 10000})]
     (is (zero? fail))
