@@ -19,7 +19,7 @@
   :test-paths ["test/clj" "test/cljs"]
   :clean-targets [:target-path "cloxp-cljs-build"]
   :profiles {:dev {:dependencies [[com.cemerick/clojurescript.test "0.3.3"]
-                                  [org.rksm/cljs-slimerjs-tester "0.1.0"]]
+                                  [org.rksm/cljs-slimerjs-tester "0.1.1-SNAPSHOT"]]
                    :plugins [[lein-cljsbuild "1.0.4"]]
                    :aliases {"cleanbuild" ["do" "clean," "cljsbuild" "once"]
                              "cleantest" ["do" "cleanbuild," "test"]

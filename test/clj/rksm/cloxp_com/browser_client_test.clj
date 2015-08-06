@@ -21,7 +21,7 @@
         (tester/run-tests (abs-path "cloxp-cljs-build/")
                           ["/out/goog/base.js" "/cloxp-cljs.js"]
                           'rksm.cloxp-com.test-runner/runner
-                          {:port 8095 :timeout 10000})]
+                          {:port 8094 :timeout 10000})]
     (is (zero? fail))
     (is (zero? error))))
 
