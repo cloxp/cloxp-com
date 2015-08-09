@@ -19,7 +19,7 @@
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-(defonce cloxp-connection (atom nil))
+(def cloxp-connection (atom nil))
 
 (defn with-con
   [do-func & [{:keys [url] :as opts}]]
@@ -32,8 +32,7 @@
        (do-func c)))))
 
 (defn start
-  [& {:keys [host port] :or {"0.0.0.0" :host} :as opts}]
-  (println "test in client")
+  [& {:keys [host port then-do] :or {"0.0.0.0" :host} :as opts}]
   (println {:url (if port 
                    (url-for-cloxp-client host port)
                    default-url)})
@@ -47,7 +46,8 @@
                         :cloxp-client? true
                         :services (-> con :services deref keys)
                         :document-url (. js/document -URL)}})
-      (println "Connected"))
+      (println "Connected, id:" (:id con))
+      (when then-do (then-do con)))
     {:url (if port 
             (url-for-cloxp-client host port)
             default-url)}))

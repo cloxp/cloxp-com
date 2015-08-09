@@ -167,10 +167,10 @@
 (defn- add-service-handler
   [receiver {{:keys [name handler]} :data, :as msg}]
   #?(:clj (do 
-          (add-service receiver name (eval (read-string handler)))
-                      (answer receiver msg "OK" false))
-     :cljs (answer receiver msg
-                 "add-service currently not supported for cljs" false)))
+            (add-service receiver name (eval (read-string handler)))
+            (answer receiver msg "OK" false))
+          :cljs (answer receiver msg
+                        "add-service currently not supported for cljs" false)))
 
 (defn default-services
   []
