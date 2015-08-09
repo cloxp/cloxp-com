@@ -4,7 +4,7 @@
             [compojure.handler :as handler]
             [compojure.response :as response]
             [org.httpkit.server :as http]
-            [compojure.core :refer [defroutes GET POST DELETE ANY context]]
+            [compojure.core :refer [defroutes GET POST DELETE ANY context routes]]
             [clojure.data.json :as json]
             [rksm.cloxp-com.messenger :as m]
             [clojure.core.async :as async :refer [>!! >! <! chan go go-loop sub pub close! put! timeout]]
@@ -36,7 +36,16 @@
 (declare register-channel find-channel channels app
          register-service-handler close-connection-service-handler
          send-message-impl
-         find-server-by-host-and-port)
+         find-server-by-host-and-port
+         make-routes)
+
+(defn- start-http-server
+  "returns server-stop-fn"
+  [{:keys [port host fs-root] :as opts}]
+;   (http/run-server #'app {:port port :host host})
+  (http/run-server
+   (-> (make-routes fs-root) log-req)
+   {:port port :host host}))
 
 (defrecord MessengerImpl [host port stop-fn receive-channel]
   m/IReceiver
@@ -48,8 +57,8 @@
   (send-message [this con msg] (send-message-impl this con msg)))
 
 (defn create-messenger
-  [& {:keys [port host], :or {port 8081 host "0.0.0.0"} :as opts}]
-  (let [stop (http/run-server #'app {:port port :host host})
+  [& {:keys [port host fs-root], :or {port 8081 host "0.0.0.0"} :as opts}]
+  (let [stop (start-http-server opts)
         services (merge (m/default-services)
                         {"register" #'register-service-handler
                          "close-connection" #'close-connection-service-handler})
@@ -74,8 +83,6 @@
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; routing
 
-(declare find-server-by-host-and-port)
-
 (defn websocket-service-handler [req]
   (http/with-channel req channel
     (http/on-receive
@@ -94,14 +101,13 @@
     (-> (response/render "<span>not here</span>" req)
       (assoc :status 404))))
 
-(defroutes all-routes
-;   (GET "/" [] show-landing-page)
-  (GET "/ws" [] websocket-service-handler)
-  (GET "/cljs-files/*" [] cljs-file-handler)
-  (route/files "/" {:root "./public" :allow-symlinks? true})
-  (route/not-found "<p>Page not found.</p>"))
-
-(def app (-> all-routes log-req))
+(defn make-routes
+  [fs-root]
+  (routes
+   (GET "/ws" [] websocket-service-handler)
+   (GET "/cljs-files/*" [] cljs-file-handler)
+   (route/files "/" {:root (or (str fs-root) "./public") :allow-symlinks? true})
+   (route/not-found "<p>Page not found.</p>")))
 
 ; -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -129,12 +135,13 @@
   (doseq [s @servers] (stop-server! s)))
 
 (defn start-server!
-  [& {:keys [port host], :or {port 8081 host "0.0.0.0"} :as opts}]
-  (let [s (create-messenger :host host :port port)]
+  [& {:keys [port host fs-root], :or {port 8081 host "0.0.0.0"}, :as opts}]
+  (let [s (create-messenger :host host :port port :fs-root fs-root)]
     (swap! servers conj s)
     s))
 
 (defn ensure-server!
+  "opts: host port fs-root"
   [& opts]
   (let [{:keys [host port]} (apply hash-map opts)]
     (or (find-server-by-host-and-port :host host :port port)

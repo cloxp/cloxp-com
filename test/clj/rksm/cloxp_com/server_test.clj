@@ -8,14 +8,23 @@
 
 (def ^:dynamic *client*)
 (def ^:dynamic *server*)
-
 (def port 8083)
 
+(def http-server-dir (when-let [project-dir (loop [dir "."]
+                                              (let [file (.getCanonicalFile (clojure.java.io/file dir))
+                                                    project-dir? (->> file
+                                                                   .listFiles
+                                                                   (map #(.getName %))
+                                                                   (some #{"project.clj"})
+                                                                   boolean)]
+                                                (if project-dir? file (recur (.getParent file)))))]
+                       (clojure.java.io/file project-dir "test/resources")))
+
 (defn fixture [test]
-  (binding [*server* (server/ensure-server! :port port)
+  (binding [*server* (server/ensure-server! :port port :fs-root http-server-dir)
             *client* (client/ensure-connection! :port port)]
     (test)
-    (client/stop! *client*) 
+    (client/stop! *client*)
     (server/stop-server! *server*)))
 
 (use-fixtures :each fixture)
@@ -30,9 +39,12 @@
     (is (contains? *server* :id)))
 
   (testing "simple GET"
-    (let [{:keys [body status]} @(http-client/get (str "http://localhost:" port))]
+    (let [{:keys [body status]} @(http-client/get (str "http://localhost:" port "/no-such-file.txt"))]
       (is (= "<p>Page not found.</p>" body))
-      (is (= 404 status))))
+      (is (= 404 status)))
+    (let [{:keys [body status]} @(http-client/get (str "http://localhost:" port "/for-server-test.html"))]
+      (is (= "<span>this file is being used in the server test</span>" body))
+      (is (= 200 status))))
 
   (testing "shutdown"
     (is (= *server* (first @server/servers)))
@@ -113,7 +125,12 @@
     (is (= 25 data))))
 
 (comment
- (test-ns *ns*)
+ (let [writer (java.io.StringWriter.)]
+   (binding [*test-out* (java.io.PrintWriter. writer)]
+     (test-ns *ns*)
+     (-> writer str println)))
+
+ (test-var #'create-a-ws-server)
 
  (-> server/servers deref first :impl .stop_receiver)
  (server/stop-all-servers!)

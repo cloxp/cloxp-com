@@ -1,0 +1,22 @@
+<html>
+<head>
+  <title>Foo</title>
+  <script src="/js/out/goog/base.js" type="text/javascript"></script>
+  <script src="/js/cloxp-cljs.js" type="text/javascript"></script>
+  <script>
+    goog.require("rksm.cloxp_com.test_runner");
+    var interval = setInterval(function() {
+      if (typeof rksm === "undefined") {
+        console.log("Loading...");
+        return;
+      }
+      clearInterval(interval);
+      rksm.cloxp_com.test_runner.runner();
+    }, 10);
+  </script>
+</head>
+
+<body>
+  <h1>simple sender</h1>
+</body>  
+</html>
