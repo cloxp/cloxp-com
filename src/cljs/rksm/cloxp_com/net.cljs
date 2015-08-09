@@ -1,12 +1,13 @@
 (ns rksm.cloxp-com.net
+  (:refer-clojure :exclude [uuid])    
   (:require [chord.client :refer [ws-ch]]
             [cljs.core.async :refer [<! >! put! close! chan sub pub timeout]]
-            [cljs-uuid-utils :as uuid]
+            [cljs-uuid-utils.core :as uuid]
             [cognitect.transit :as t]
             [rksm.cloxp-com.messenger :as m])
   (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
 
-(def debug true)
+(def debug false)
 
 (defn log
   [& msgs]

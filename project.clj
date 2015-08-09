@@ -12,7 +12,7 @@
                  [stylefruits/gniazdo "0.4.0"]
                  [jarohen/chord "0.6.0" :exclusions [com.cemerick/clojurescript.test]]
                  [org.clojure/data.json "0.2.6"]
-                 [org.clojars.franks42/cljs-uuid-utils "0.1.3"]
+                 [com.lucasbradstreet/cljs-uuid-utils "1.0.2"]
                  [com.cognitect/transit-cljs "0.8.220"]
                  [medley/medley "0.7.0"]
                  [org.rksm/system-files "0.1.7-SNAPSHOT"]]

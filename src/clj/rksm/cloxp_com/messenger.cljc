@@ -1,8 +1,8 @@
 (ns rksm.cloxp-com.messenger
-  (:refer-clojure :exclude [send])
+  (:refer-clojure :exclude [send uuid])
   (:require #?(:clj [clojure.core.async :refer [>! <! chan go go-loop sub pub close! timeout]])
             #?(:cljs [cljs.core.async :refer [<! >! put! close! chan sub pub timeout]])
-            #?(:cljs [cljs-uuid-utils :as uuid])
+            #?(:cljs [cljs-uuid-utils.core :as uuid])
             #?(:clj [clojure.data.json :as json]))
   #?(:cljs (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
   #?(:clj (:import (java.util UUID))))
