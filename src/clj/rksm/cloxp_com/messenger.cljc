@@ -142,13 +142,14 @@
 
 (defn answer-message-not-understood
   [receiver msg]
-  (answer receiver msg {:error "messageNotUnderstood"} false))
+  (let [err "messageNotUnderstood"]
+    (answer receiver msg {:error err :value err :status :error} false)))
 
 (defn- handle-target-not-found
   [receiver {:keys [target action] :as msg}]
   (let [err (str "cannot forward message " action " to target " target)]
     (println err)
-    (answer receiver msg {:error err} false)))
+    (answer receiver msg {:error err :value err :status :error} false)))
 
 (defn- info-service-handler
   [{id :id, :as receiver} msg]
@@ -198,4 +199,4 @@
                   (catch #?(:clj Exception :cljs js/Error) e
                     (do
                       (println "Error handling service request " name ":\n" e)
-                      (answer messenger msg {:error (str e)} false))))))))
+                      (answer messenger msg {:error (str e) :value (str e) :status :error} false))))))))
