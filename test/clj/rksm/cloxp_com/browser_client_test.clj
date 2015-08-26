@@ -10,7 +10,7 @@
     .getCanonicalPath))
 
 (defn fixture [test]
-  (let [server (server/ensure-server! :port 8084)]
+  (let [server (server/ensure-server! :port 8084 :fs-root (abs-path "."))]
     (test)
     (server/stop-server! server)))
 

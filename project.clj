@@ -5,15 +5,15 @@
   :url "https://github.com/cloxp/cloxp-com"
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
-                 [org.clojure/clojurescript "0.0-3308"]
+                 [org.clojure/clojurescript "1.7.48"]
                  [http-kit "2.1.19"]
                  [compojure "1.4.0"]
                  [javax.servlet/servlet-api "2.5"]
                  [stylefruits/gniazdo "0.4.0"]
-                 [jarohen/chord "0.6.0" :exclusions [com.cemerick/clojurescript.test]]
+                 [jarohen/chord "0.6.0" :exclusions [com.cemerick/clojurescript.test
+                                                     com.cognitect/transit-clj]]
                  [org.clojure/data.json "0.2.6"]
                  [com.lucasbradstreet/cljs-uuid-utils "1.0.2"]
-                 [com.cognitect/transit-cljs "0.8.220"]
                  [medley/medley "0.7.0"]
                  [org.rksm/system-files "0.1.7-SNAPSHOT"]]
   :source-paths ["src/clj" "src/cljs"]
@@ -31,5 +31,6 @@
                                             :output-dir "cloxp-cljs-build/out",
                                             :optimizations :none,
                                             :cache-analysis true,
-                                            :warnings true}}}
+                                            :warnings true
+                                            :verbose true}}}
               :test-commands {"unit-tests" ["slimerjs" "public/slimerjs-test.js"]}})

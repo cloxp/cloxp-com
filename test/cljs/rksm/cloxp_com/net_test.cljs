@@ -3,8 +3,7 @@
   (:require [rksm.cloxp-com.net :as net]
             [rksm.cloxp-com.messenger :as m]
             [cljs.core.async :refer [<! >! put! close! chan pub sub timeout]]
-            [rksm.cloxp-com.async-util :refer [join]]
-            [cognitect.transit :as t])
+            [rksm.cloxp-com.async-util :refer [join]])
   (:require-macros [cljs.core.async.macros :refer [go go-loop]]
                    [cemerick.cljs.test :refer [is deftest testing use-fixtures done]]))
 
